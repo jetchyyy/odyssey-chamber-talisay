@@ -63,7 +63,6 @@ export const AboutSection: React.FC = () => (
           <motion.div custom={4} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
             className="flex flex-wrap gap-8 mb-10 pt-8 border-t border-gray-100">
             {[
-              { num: "500+", label: "Active Members" },
               { num: "PHP 2B+", label: "Economic Impact" },
               { num: "27yrs", label: "Years of Service" },
             ].map(({ num, label }) => (

@@ -2,10 +2,10 @@ import React from "react";
 import { motion } from "framer-motion";
 import type { Variants } from "framer-motion";
 import { Link } from "react-router-dom";
-import { ArrowRight, Building2, CalendarDays, MapPin, Users } from "lucide-react";
+import { ArrowRight, Building2, CalendarDays, MapPin, Briefcase } from "lucide-react";
 
 const metrics = [
-  { value: "538", label: "member companies", icon: Users },
+  { value: "50+", label: "annual events", icon: Briefcase },
   { value: "1998", label: "institution founded", icon: CalendarDays },
   { value: "PHP 2B+", label: "local impact", icon: Building2 },
 ];
@@ -82,7 +82,8 @@ const HeroSection: React.FC = () => (
           className="mt-8 flex max-w-xl items-center gap-4 border-t border-white/10 pt-4 text-sm text-[#81958a]"
         >
           <MapPin size={16} className="text-gold" />
-          <span>Talisay City Hall Compound, Lawaan II</span>
+          <span>Paseo Ricardo Commercial Center, Nonoc, Rafael Rabaya Rd
+            City of Talisay, Cebu, Philippines</span>
           <span className="ml-auto hidden h-px flex-1 bg-white/10 sm:block" />
         </motion.div>
       </motion.div>

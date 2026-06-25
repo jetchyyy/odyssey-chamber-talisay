@@ -86,7 +86,7 @@ const fallbackNews = [
   {
     id: "fallback-news-3",
     title: "38 new businesses join at the latest member orientation",
-    summary: "The newest batch spans retail, healthcare, logistics, and services, bringing the total membership to 538.",
+    summary: "The newest batch spans retail, healthcare, logistics, and services, strengthening our local commerce and economic network.",
     published_at: "2026-04-15T00:00:00Z",
     category: "Membership",
     read_time: "2 min",
@@ -772,7 +772,7 @@ export const CtaSection: React.FC = () => {
 
         <motion.p custom={2} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
           className="text-[1.0625rem] text-slate-400 mb-12 max-w-[52ch] mx-auto leading-[1.8]">
-          Join 500+ businesses in Talisay's most powerful commercial network. Gain exclusive access
+          Join Talisay's most powerful commercial network. Gain exclusive access
           to events, resources, partnerships, and government linkages.
         </motion.p>
 
@@ -791,7 +791,6 @@ export const CtaSection: React.FC = () => {
         <motion.div custom={4} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
           className="flex flex-wrap justify-center gap-8">
           {[
-            { num: "538", label: "Active Members" },
             { num: "27", label: "Years of Service" },
             { num: "50+", label: "Events/Year" },
             { num: "PHP 2B+", label: "Economic Impact" },

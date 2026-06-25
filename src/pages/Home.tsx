@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowUp } from "lucide-react";
 import HeroSection from "../components/sections/HeroSection";
@@ -10,32 +10,34 @@ const GrainOverlay: React.FC = () => (
 );
 
 const partners = [
-  "DTI Region VII", "DICT Philippines", "Cebu Chamber of Commerce",
-  "SM Talisay City", "BDO Unibank", "Philippine Chamber of Commerce",
-  "Talisay City LGU", "UnionBank Philippines", "Go Negosyo", "DOLE Cebu",
-  "PCCI", "SB Corp", "Cebu City Government",
+  { name: "Province of Cebu", logo: "/Cebu_province_seal_2.svg.png" },
+  { name: "City of Talisay", logo: "/talisaycitylogo.jpeg" },
+  { name: "DTI", logo: "/dtilogo.png" },
 ];
 
 const PartnersSection: React.FC = () => (
-  <section className="py-16 bg-[#fffdf8] border-y border-[#eadfcb] overflow-hidden" aria-label="Partners and affiliates">
-    <div className="container mx-auto px-4 md:px-10 max-w-7xl mb-7 flex items-center justify-between">
-      <span className="text-[10px] font-heading font-bold text-gray-300 tracking-[0.22em] uppercase">
-        Trusted Partners & Affiliates
-      </span>
-      <div className="h-px flex-1 bg-gray-100 ml-6" />
-    </div>
-    <div className="relative overflow-hidden">
-      {/* Edge fades */}
-      <div className="absolute left-0 top-0 w-32 h-full bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" aria-hidden="true" />
-      <div className="absolute right-0 top-0 w-32 h-full bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" aria-hidden="true" />
-      <div className="marquee-track">
-        {[...partners, ...partners].map((p, i) => (
-          <div
-            key={`${p}-${i}`}
-        className="flex-shrink-0 mx-4 px-5 py-2.5 rounded-2xl border border-[#eadfcb] bg-white/75 text-[#6d746f] text-[13px] font-heading font-semibold whitespace-nowrap hover:border-gold/35 hover:text-green-brand hover:bg-[#fff8e8] spring-fast cursor-default"
+  <section className="py-16 bg-[#ebf4fc]" aria-label="Partners and affiliates">
+    <div className="container mx-auto px-4 md:px-10 max-w-5xl text-center">
+      <h2 className="text-3xl md:text-4xl font-heading font-extrabold text-[#2b3e5a] mb-12">
+        Our Partners
+      </h2>
+      
+      <div className="flex flex-wrap justify-center items-center gap-12 md:gap-20 lg:gap-28">
+        {partners.map(({ name, logo }, i) => (
+          <motion.div
+            key={name}
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: i * 0.15, ease: [0.32, 0.72, 0, 1] }}
+            className="flex items-center justify-center group"
           >
-            {p}
-          </div>
+            <img
+              src={logo}
+              alt={`${name} official logo`}
+              className="h-20 md:h-24 lg:h-28 w-auto object-contain transition-transform duration-300 group-hover:scale-105 mix-blend-multiply"
+            />
+          </motion.div>
         ))}
       </div>
     </div>
