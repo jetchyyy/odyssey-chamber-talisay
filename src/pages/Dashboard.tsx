@@ -10,7 +10,7 @@ import {
   User, Building2, CheckCircle2, Shield, CalendarDays, 
   MapPin, Loader2, ArrowRight, QrCode, Phone, Map, 
   Globe, Mail, CreditCard, LogOut, Download, Newspaper, Plus, Trash2, Edit2, X,
-  Camera, Upload
+  Camera, Upload, Key
 } from "lucide-react";
 import { uploadImage } from "../lib/storage";
 
@@ -129,7 +129,13 @@ const Dashboard: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [registeredEvents, setRegisteredEvents] = useState<RegisteredEvent[]>([]);
-  const [activeTab, setActiveTab] = useState<"card" | "events" | "directory" | "news">("card");
+  const [activeTab, setActiveTab] = useState<"card" | "events" | "directory" | "news" | "settings">("card");
+
+  // Password change states
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Renewal states
   const [hasPendingRenewal, setHasPendingRenewal] = useState(false);
@@ -427,6 +433,86 @@ const Dashboard: React.FC = () => {
       toast.error(err.message || "Failed to submit renewal application.");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // Password validation constraints
+  const hasMinLength = newPassword.length >= 8;
+  const hasUppercase = /[A-Z]/.test(newPassword);
+  const hasLowercase = /[a-z]/.test(newPassword);
+  const hasNumber = /[0-9]/.test(newPassword);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+  const passwordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
+
+  const strengthScore = [
+    hasMinLength,
+    hasUppercase,
+    hasLowercase,
+    hasNumber,
+    hasSpecial
+  ].filter(Boolean).length;
+
+  const getStrengthLabel = () => {
+    if (!newPassword) return "";
+    if (strengthScore <= 2) return "Weak";
+    if (strengthScore <= 4) return "Fair";
+    return "Strong";
+  };
+
+  const getStrengthColor = () => {
+    if (strengthScore <= 2) return "bg-red-500";
+    if (strengthScore <= 4) return "bg-amber-500";
+    return "bg-green-600";
+  };
+
+  // Change User Password
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !profile) return;
+
+    if (!oldPassword) {
+      toast.error("Please enter your current password.");
+      return;
+    }
+
+    const allCriteriaMet = hasMinLength && hasUppercase && hasLowercase && hasNumber && hasSpecial;
+    if (!allCriteriaMet) {
+      toast.error("Please satisfy all password strength criteria.");
+      return;
+    }
+
+    if (!passwordsMatch) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      // 1. Silent re-authentication to verify old password
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: profile.email || user.email || "",
+        password: oldPassword,
+      });
+
+      if (verifyError) {
+        throw new Error("Verification failed: The old password you entered is incorrect.");
+      }
+
+      // 2. Update to new password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) throw updateError;
+
+      toast.success("Password updated successfully!");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update password.");
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -1084,6 +1170,16 @@ const Dashboard: React.FC = () => {
             >
               <Newspaper size={16} /> News Submissions ({myNews.length})
             </button>
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={`w-full text-left px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-3 transition-colors ${
+                activeTab === "settings"
+                  ? "bg-green-700 text-white shadow-diffuse"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-green-700"
+              }`}
+            >
+              <Key size={16} /> Change Password
+            </button>
           </div>
 
           {/* Main workspace */}
@@ -1569,6 +1665,154 @@ const Dashboard: React.FC = () => {
                       </table>
                     </div>
                   )}
+                </motion.div>
+              )}
+
+              {/* Tab 5: Change Password */}
+              {activeTab === "settings" && (
+                <motion.div
+                  key="settings"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-[0_4px_30px_rgba(0,0,0,0.02)] text-left"
+                >
+                  <div className="mb-6">
+                    <h2 className="text-xl font-heading font-black text-[#0D1A14] mb-1">
+                      Account Security Settings
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      Update your login password. To ensure security, verify your identity with your current password, and choose a new, strong password.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handlePasswordChange} className="max-w-md space-y-4 text-xs font-semibold text-gray-700">
+                    <div>
+                      <label className="block text-[11px] font-heading font-bold text-gray-500 uppercase mb-1.5">Current Password *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Enter your current password"
+                        value={oldPassword}
+                        onChange={(e) => setOldPassword(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-gray-900 outline-none focus:bg-white focus:border-green-500 transition-all font-semibold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-heading font-bold text-gray-500 uppercase mb-1.5">New Password *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Enter secure new password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-gray-900 outline-none focus:bg-white focus:border-green-500 transition-all font-semibold"
+                      />
+                    </div>
+
+                    {/* Password strength meter */}
+                    {newPassword && (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-[10px] uppercase font-bold text-gray-400">
+                          <span>Password Strength</span>
+                          <span className={`font-black ${
+                            strengthScore <= 2 ? "text-red-500" : strengthScore <= 4 ? "text-amber-500" : "text-green-600"
+                          }`}>
+                            {getStrengthLabel()}
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full bg-gray-105 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all duration-300 ${getStrengthColor()}`}
+                            style={{ width: `${(strengthScore / 5) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-[11px] font-heading font-bold text-gray-500 uppercase mb-1.5">Confirm New Password *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Confirm your new password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-gray-900 outline-none focus:bg-white focus:border-green-500 transition-all font-semibold"
+                      />
+                    </div>
+
+                    {/* Password validation indicators checklist */}
+                    <div className="p-4.5 bg-gray-55/40 border border-gray-100 rounded-2xl space-y-2 text-gray-500 font-normal">
+                      <div className="text-[10px] uppercase font-bold text-gray-400 mb-1">Security Criteria Checklist</div>
+                      
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 size={14} className={hasMinLength ? "text-green-600" : "text-gray-300"} />
+                        <span className={`transition-colors text-xs ${hasMinLength ? "text-green-700 font-semibold" : "text-gray-400"}`}>
+                          At least 8 characters
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 size={14} className={hasUppercase ? "text-green-600" : "text-gray-300"} />
+                        <span className={`transition-colors text-xs ${hasUppercase ? "text-green-700 font-semibold" : "text-gray-400"}`}>
+                          Contains an uppercase letter (A-Z)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 size={14} className={hasLowercase ? "text-green-600" : "text-gray-300"} />
+                        <span className={`transition-colors text-xs ${hasLowercase ? "text-green-700 font-semibold" : "text-gray-400"}`}>
+                          Contains a lowercase letter (a-z)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 size={14} className={hasNumber ? "text-green-600" : "text-gray-300"} />
+                        <span className={`transition-colors text-xs ${hasNumber ? "text-green-700 font-semibold" : "text-gray-400"}`}>
+                          Contains a number (0-9)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 size={14} className={hasSpecial ? "text-green-600" : "text-gray-300"} />
+                        <span className={`transition-colors text-xs ${hasSpecial ? "text-green-700 font-semibold" : "text-gray-400"}`}>
+                          Contains a special character (e.g. !@#$%)
+                        </span>
+                      </div>
+
+                      <div className="border-t border-gray-100 my-1 pt-2 flex items-center gap-2.5">
+                        <CheckCircle2 size={14} className={passwordsMatch ? "text-green-600" : "text-gray-300"} />
+                        <span className={`transition-colors text-xs ${passwordsMatch ? "text-green-700 font-semibold" : "text-gray-400"}`}>
+                          Passwords match
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={
+                        isChangingPassword ||
+                        !oldPassword ||
+                        !hasMinLength ||
+                        !hasUppercase ||
+                        !hasLowercase ||
+                        !hasNumber ||
+                        !hasSpecial ||
+                        !passwordsMatch
+                      }
+                      className="w-full py-3 rounded-xl bg-green-700 hover:bg-green-600 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-diffuse text-xs"
+                    >
+                      {isChangingPassword ? (
+                        <>
+                          <Loader2 className="animate-spin" size={14} /> Updating Password...
+                        </>
+                      ) : (
+                        "Update Password"
+                      )}
+                    </button>
+                  </form>
                 </motion.div>
               )}
             </AnimatePresence>
