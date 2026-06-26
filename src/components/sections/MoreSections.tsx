@@ -101,6 +101,7 @@ export const EventsSection: React.FC = () => {
   const navigate = useNavigate();
 
   const [dbEvents, setDbEvents] = useState<any[]>([]);
+  const [hasFetchedEvents, setHasFetchedEvents] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
   
   // Registration flow
@@ -121,23 +122,27 @@ export const EventsSection: React.FC = () => {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const { data } = await supabase.from("events").select("*").eq("is_archived", false).order("date", { ascending: true });
-        if (data && data.length > 0) {
+        const { data, error } = await supabase.from("events").select("*").eq("is_archived", false).order("date", { ascending: true });
+        if (error) throw error;
+        if (data) {
           setDbEvents(data);
+          setHasFetchedEvents(true);
           
-          // Check query parameters to see if we should auto-open a registration modal
-          const params = new URLSearchParams(window.location.search);
-          const registerEventId = params.get("register");
-          if (registerEventId) {
-            const foundEvent = data.find(e => e.id === registerEventId);
-            if (foundEvent) {
-              setSelectedEvent(foundEvent);
-              setGuestName("");
-              setGuestEmail("");
-              setRegSuccess(false);
-              setRegError(null);
-              setPaymentReference("");
-              setRegQrCodePass("");
+          if (data.length > 0) {
+            // Check query parameters to see if we should auto-open a registration modal
+            const params = new URLSearchParams(window.location.search);
+            const registerEventId = params.get("register");
+            if (registerEventId) {
+              const foundEvent = data.find(e => e.id === registerEventId);
+              if (foundEvent) {
+                setSelectedEvent(foundEvent);
+                setGuestName("");
+                setGuestEmail("");
+                setRegSuccess(false);
+                setRegError(null);
+                setPaymentReference("");
+                setRegQrCodePass("");
+              }
             }
           }
         }
@@ -164,9 +169,9 @@ export const EventsSection: React.FC = () => {
     fetchPaymentDetails();
   }, [selectedEvent]);
 
-  const activeEvents = dbEvents.length > 0 ? dbEvents : fallbackEvents;
+  const activeEvents = hasFetchedEvents ? dbEvents : fallbackEvents;
   const featured = activeEvents.find(e => e.is_featured) || activeEvents[0];
-  const rest = activeEvents.filter(e => e.id !== featured.id);
+  const rest = activeEvents.filter(e => e.id !== (featured?.id));
 
   const handleRegisterClick = (evt: any) => {
     setSelectedEvent(evt);
@@ -268,73 +273,85 @@ export const EventsSection: React.FC = () => {
         </div>
 
         {/* Asymmetric layout: large featured card + stacked side cards */}
-        <div className="grid lg:grid-cols-[1.3fr_0.7fr] gap-5">
+        {activeEvents.length > 0 ? (
+          <div className="grid lg:grid-cols-[1.3fr_0.7fr] gap-5">
 
-          {/* Featured event  double-bezel */}
-          <motion.article
-            custom={0} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
-            className="bezel-outer shadow-diffuse cursor-pointer group"
-          >
-            <div className="bezel-inner flex flex-col h-full">
-              <div className="relative h-64 overflow-hidden rounded-t-[calc(2rem-5px)]">
-                <img src={featured.image_url} alt={featured.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0D1A14]/70 to-transparent" />
-                <span className={`absolute top-4 left-4 text-xs font-heading font-semibold px-3 py-1 rounded-full ${featured.tag_color || "bg-green-700 text-white"}`}>
-                  {featured.tag} - Featured
-                </span>
-                <span className="absolute bottom-4 right-4 bg-[#0D1A14]/85 text-green-400 text-xs font-bold px-3 py-1 rounded-full border border-green-900/40">
-                  {featured.price === 0 ? "Free Event" : `PHP ${featured.price.toLocaleString()}`}
-                </span>
-              </div>
-              <div className="p-7 flex-1 flex flex-col">
-                <h3 className="font-heading font-bold text-[#0D1A14] text-xl mb-4 leading-snug group-hover:text-green-700 spring">
-                  {featured.title}
-                </h3>
-                <div className="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-6">
-                  <span className="flex items-center gap-2"><CalendarDays size={13} className="text-green-600" />{new Date(featured.date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
-                  <span className="flex items-center gap-2"><Clock size={13} className="text-green-600" />{featured.time}</span>
-                  <span className="flex items-center gap-2 col-span-2"><MapPin size={13} className="text-green-600" />{featured.venue}</span>
-                </div>
-                <div className="mt-auto">
-                  <button onClick={() => handleRegisterClick(featured)} className="btn-premium bg-green-700 hover:bg-green-600 text-white w-full justify-center shadow-diffuse hover:-translate-y-0.5 cursor-pointer">
-                    Register Now
-                    <span className="btn-icon-wrap !bg-white/15"><ArrowUpRight size={13} /></span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </motion.article>
-
-          {/* Side cards */}
-          <div className="flex flex-col gap-5">
-            {rest.map((evt, i) => (
+            {/* Featured event  double-bezel */}
+            {featured && (
               <motion.article
-                key={evt.id}
-                custom={i + 1} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                onClick={() => handleRegisterClick(evt)}
-                className="spotlight-card flex gap-4 p-5 cursor-pointer group flex-1"
+                custom={0} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
+                className="bezel-outer shadow-diffuse cursor-pointer group"
               >
-                <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0">
-                  <img src={evt.image_url} alt={evt.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-1.5">
-                    <span className={`text-[9px] font-heading font-semibold px-2 py-0.5 rounded-full ${evt.tag_color || "bg-green-100 text-green-700"}`}>{evt.tag}</span>
-                    <span className="text-[10px] font-bold text-green-700">{evt.price === 0 ? "Free" : `PHP ${evt.price}`}</span>
+                <div className="bezel-inner flex flex-col h-full">
+                  <div className="relative h-64 overflow-hidden rounded-t-[calc(2rem-5px)]">
+                    <img src={featured.image_url} alt={featured.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0D1A14]/70 to-transparent" />
+                    <span className={`absolute top-4 left-4 text-xs font-heading font-semibold px-3 py-1 rounded-full ${featured.tag_color || "bg-green-700 text-white"}`}>
+                      {featured.tag} - Featured
+                    </span>
+                    <span className="absolute bottom-4 right-4 bg-[#0D1A14]/85 text-green-400 text-xs font-bold px-3 py-1 rounded-full border border-green-900/40">
+                      {featured.price === 0 ? "Free Event" : `PHP ${featured.price.toLocaleString()}`}
+                    </span>
                   </div>
-                  <h3 className="font-heading font-bold text-[#0D1A14] text-sm leading-snug mb-2 group-hover:text-green-700 spring line-clamp-2">
-                    {evt.title}
-                  </h3>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400">
-                    <span className="flex items-center gap-1"><CalendarDays size={11} className="text-green-600" />{new Date(evt.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                    <span className="flex items-center gap-1"><MapPin size={11} className="text-green-600" />{evt.venue}</span>
+                  <div className="p-7 flex-1 flex flex-col">
+                    <h3 className="font-heading font-bold text-[#0D1A14] text-xl mb-4 leading-snug group-hover:text-green-700 spring">
+                      {featured.title}
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-6">
+                      <span className="flex items-center gap-2"><CalendarDays size={13} className="text-green-600" />{new Date(featured.date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+                      <span className="flex items-center gap-2"><Clock size={13} className="text-green-600" />{featured.time}</span>
+                      <span className="flex items-center gap-2 col-span-2"><MapPin size={13} className="text-green-600" />{featured.venue}</span>
+                    </div>
+                    <div className="mt-auto">
+                      <button onClick={() => handleRegisterClick(featured)} className="btn-premium bg-green-700 hover:bg-green-600 text-white w-full justify-center shadow-diffuse hover:-translate-y-0.5 cursor-pointer">
+                        Register Now
+                        <span className="btn-icon-wrap !bg-white/15"><ArrowUpRight size={13} /></span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </motion.article>
-            ))}
+            )}
+
+            {/* Side cards */}
+            <div className="flex flex-col gap-5">
+              {rest.map((evt, i) => (
+                <motion.article
+                  key={evt.id}
+                  custom={i + 1} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
+                  onClick={() => handleRegisterClick(evt)}
+                  className="spotlight-card flex gap-4 p-5 cursor-pointer group flex-1"
+                >
+                  <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0">
+                    <img src={evt.image_url} alt={evt.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className={`text-[9px] font-heading font-semibold px-2 py-0.5 rounded-full ${evt.tag_color || "bg-green-100 text-green-700"}`}>{evt.tag}</span>
+                      <span className="text-[10px] font-bold text-green-700">{evt.price === 0 ? "Free" : `PHP ${evt.price}`}</span>
+                    </div>
+                    <h3 className="font-heading font-bold text-[#0D1A14] text-sm leading-snug mb-2 group-hover:text-green-700 spring line-clamp-2">
+                      {evt.title}
+                    </h3>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400">
+                      <span className="flex items-center gap-1"><CalendarDays size={11} className="text-green-600" />{new Date(evt.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                      <span className="flex items-center gap-1"><MapPin size={11} className="text-green-600" />{evt.venue}</span>
+                    </div>
+                  </div>
+                </motion.article>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 px-4 bg-gray-50 border border-gray-100 rounded-[2rem] text-center w-full">
+            <CalendarDays className="w-12 h-12 text-[#0D1A14]/20 mb-4" />
+            <h3 className="text-lg font-heading font-bold text-[#0D1A14] mb-1">No upcoming events</h3>
+            <p className="text-sm text-gray-500 max-w-sm">
+              There are no upcoming events scheduled at the moment. Please stay tuned or check back later!
+            </p>
+          </div>
+        )}
       </div>
 
       {/* EVENT REGISTRATION MODAL */}
@@ -594,6 +611,7 @@ export const EventsSection: React.FC = () => {
 
 export const NewsSection: React.FC = () => {
   const [dbNews, setDbNews] = useState<any[]>([]);
+  const [hasFetchedNews, setHasFetchedNews] = useState(false);
   const [selectedNews, setSelectedNews] = useState<any | null>(null);
   const navigate = useNavigate();
   const [activeImgIndex, setActiveImgIndex] = useState(0);
@@ -605,9 +623,11 @@ export const NewsSection: React.FC = () => {
   useEffect(() => {
     const fetchNews = async () => {
       try {
-        const { data } = await supabase.from("news").select("*").eq("status", "approved").order("published_at", { ascending: false });
-        if (data && data.length > 0) {
+        const { data, error } = await supabase.from("news").select("*").eq("status", "approved").order("published_at", { ascending: false });
+        if (error) throw error;
+        if (data) {
           setDbNews(data);
+          setHasFetchedNews(true);
         } else {
           setDbNews([]);
         }
@@ -618,7 +638,7 @@ export const NewsSection: React.FC = () => {
     fetchNews();
   }, []);
 
-  const activeNews = dbNews.length > 0 ? dbNews : fallbackNews;
+  const activeNews = hasFetchedNews ? dbNews : fallbackNews;
   const featured = activeNews[0];
   const rest = activeNews.slice(1);
 
@@ -642,58 +662,70 @@ export const NewsSection: React.FC = () => {
         </div>
 
         {/* Asymmetric 2-col: big featured + 2 stacked  items-stretch for equal heights */}
-        <div className="grid lg:grid-cols-[1.4fr_1fr] gap-6 items-stretch">
-          {/* Featured */}
-          <motion.article
-            custom={0} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
-            onClick={() => setSelectedNews(featured)}
-            className="group cursor-pointer"
-          >
-            <div className="bezel-outer shadow-diffuse h-full">
-              <div className="bezel-inner flex flex-col h-full">
-                <div className="h-56 overflow-hidden rounded-t-[calc(2rem-5px)] flex-shrink-0">
-                  <img src={featured.image_url} alt={featured.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]" />
-                </div>
-                <div className="p-7 flex flex-col flex-1">
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="text-[10px] font-heading font-semibold px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-100">{featured.category}</span>
-                    <span className="text-xs text-gray-400 flex items-center gap-1"><Newspaper size={10} /> {featured.read_time || "3 min"} read</span>
-                  </div>
-                  <h3 className="font-heading font-bold text-[#0D1A14] text-xl mb-3 leading-snug group-hover:text-green-700 spring">
-                    {featured.title}
-                  </h3>
-                  <p className="text-gray-500 text-sm leading-relaxed mb-4 flex-1">{featured.summary}</p>
-                  <span className="text-xs text-gray-400">{new Date(featured.published_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
-                </div>
-              </div>
-            </div>
-          </motion.article>
-
-          {/* Side articles */}
-          <div className="flex flex-col gap-5">
-            {rest.map((item, i) => (
+        {activeNews.length > 0 ? (
+          <div className="grid lg:grid-cols-[1.4fr_1fr] gap-6 items-stretch">
+            {/* Featured */}
+            {featured && (
               <motion.article
-                key={item.id}
-                custom={i + 1} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                onClick={() => setSelectedNews(item)}
-                className="spotlight-card flex gap-4 p-5 cursor-pointer group flex-1"
+                custom={0} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
+                onClick={() => setSelectedNews(featured)}
+                className="group cursor-pointer"
               >
-                <div className="w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0">
-                  <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-100">{item.category}</span>
-                    <span className="text-[10px] text-gray-400">{item.read_time || "3 min"} read</span>
+                <div className="bezel-outer shadow-diffuse h-full">
+                  <div className="bezel-inner flex flex-col h-full">
+                    <div className="h-56 overflow-hidden rounded-t-[calc(2rem-5px)] flex-shrink-0">
+                      <img src={featured.image_url} alt={featured.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]" />
+                    </div>
+                    <div className="p-7 flex flex-col flex-1">
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="text-[10px] font-heading font-semibold px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-100">{featured.category}</span>
+                        <span className="text-xs text-gray-400 flex items-center gap-1"><Newspaper size={10} /> {featured.read_time || "3 min"} read</span>
+                      </div>
+                      <h3 className="font-heading font-bold text-[#0D1A14] text-xl mb-3 leading-snug group-hover:text-green-700 spring">
+                        {featured.title}
+                      </h3>
+                      <p className="text-gray-500 text-sm leading-relaxed mb-4 flex-1">{featured.summary}</p>
+                      <span className="text-xs text-gray-400">{new Date(featured.published_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+                    </div>
                   </div>
-                  <h3 className="font-heading font-bold text-[#0D1A14] text-sm leading-snug mb-2 group-hover:text-green-700 spring line-clamp-2">{item.title}</h3>
-                  <p className="text-gray-400 text-xs leading-relaxed line-clamp-2 mb-2">{item.summary}</p>
-                  <span className="text-[11px] text-gray-400">{new Date(item.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                 </div>
               </motion.article>
-            ))}
+            )}
+
+            {/* Side articles */}
+            <div className="flex flex-col gap-5">
+              {rest.map((item, i) => (
+                <motion.article
+                  key={item.id}
+                  custom={i + 1} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
+                  onClick={() => setSelectedNews(item)}
+                  className="spotlight-card flex gap-4 p-5 cursor-pointer group flex-1"
+                >
+                  <div className="w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0">
+                    <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-100">{item.category}</span>
+                      <span className="text-[10px] text-gray-400">{item.read_time || "3 min"} read</span>
+                    </div>
+                    <h3 className="font-heading font-bold text-[#0D1A14] text-sm leading-snug mb-2 group-hover:text-green-700 spring line-clamp-2">{item.title}</h3>
+                    <p className="text-gray-400 text-xs leading-relaxed line-clamp-2 mb-2">{item.summary}</p>
+                    <span className="text-[11px] text-gray-400">{new Date(item.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  </div>
+                </motion.article>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 px-4 bg-gray-50 border border-gray-100 rounded-[2rem] text-center w-full">
+            <Newspaper className="w-12 h-12 text-[#0D1A14]/20 mb-4" />
+            <h3 className="text-lg font-heading font-bold text-[#0D1A14] mb-1">No news updates</h3>
+            <p className="text-sm text-gray-550 max-w-sm">
+              There are no news updates or announcements at the moment. Please check back later!
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ARTICLE READER MODAL */}
