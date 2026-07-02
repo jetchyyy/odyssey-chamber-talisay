@@ -284,6 +284,7 @@ export const DirectoryTab: React.FC = () => {
           website_url: biz.pending_changes.website_url,
           facebook_url: biz.pending_changes.facebook_url !== undefined ? biz.pending_changes.facebook_url : biz.facebook_url,
           instagram_url: biz.pending_changes.instagram_url !== undefined ? biz.pending_changes.instagram_url : biz.instagram_url,
+          logo_url: biz.pending_changes.logo_url !== undefined ? biz.pending_changes.logo_url : biz.logo_url,
           pending_changes: null,
           approval_status: "approved"
         })
@@ -370,6 +371,38 @@ export const DirectoryTab: React.FC = () => {
               : "text-gray-400 bg-white/[0.01] border-white/5"
           }`}>
             {proposedVal || <span className="italic text-gray-600">Empty</span>}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderLogoComparison = (liveVal: string | null, proposedVal: string | null) => {
+    const isChanged = liveVal !== proposedVal;
+    return (
+      <div className="grid grid-cols-2 gap-4 py-2.5 border-b border-white/5 text-left">
+        <div>
+          <div className="text-[10px] text-[#8A9690] uppercase font-bold">Business Logo (Live)</div>
+          <div className="mt-1 flex items-center justify-start p-2 rounded-lg bg-white/[0.01] border border-white/5 w-16 h-16 overflow-hidden">
+            {liveVal ? (
+              <img src={liveVal} alt="Live logo" className="w-full h-full object-contain" />
+            ) : (
+              <Building2 size={24} className="text-gray-650 mx-auto" />
+            )}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-[#4ADE80] uppercase font-bold">Business Logo (Proposed)</div>
+          <div className={`mt-1 flex items-center justify-start p-2 rounded-lg border w-16 h-16 overflow-hidden ${
+            isChanged 
+              ? "bg-emerald-500/5 border-emerald-500/20" 
+              : "bg-[#101D17] border-white/5"
+          }`}>
+            {proposedVal ? (
+              <img src={proposedVal} alt="Proposed logo" className="w-full h-full object-contain" />
+            ) : (
+              <Building2 size={24} className="text-gray-650 mx-auto" />
+            )}
           </div>
         </div>
       </div>
@@ -917,6 +950,7 @@ export const DirectoryTab: React.FC = () => {
               </div>
 
               <div className="space-y-1 mb-8 overflow-y-auto max-h-[50vh] pr-1.5 custom-scrollbar">
+                {renderLogoComparison(reviewingDir.logo_url ?? null, reviewingDir.pending_changes.logo_url ?? null)}
                 {renderComparisonField("Business Name", reviewingDir.business_name, reviewingDir.pending_changes.business_name)}
                 {renderComparisonField("Category", reviewingDir.category, reviewingDir.pending_changes.category)}
                 {renderComparisonField("Business Description", reviewingDir.description, reviewingDir.pending_changes.description)}

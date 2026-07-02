@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { 
   Users, CreditCard, CalendarDays, Newspaper, Building2, 
-  TrendingUp, QrCode, Shield, ArrowLeft, RefreshCw, Loader2, UserCheck, Key
+  TrendingUp, QrCode, Shield, ArrowLeft, RefreshCw, Loader2, UserCheck, Key, Tag, Package, MessageSquareQuote
 } from "lucide-react";
 
 // Tab Subcomponents
@@ -19,6 +19,9 @@ import { NewsTab } from "../components/admin/NewsTab";
 import { DirectoryTab } from "../components/admin/DirectoryTab";
 import { BoardTab } from "../components/admin/BoardTab";
 import { PasswordTab } from "../components/admin/PasswordTab";
+import { PromosTab } from "../components/admin/PromosTab";
+import { PackagesTab } from "../components/admin/PackagesTab";
+import StoriesAdminTab from "../components/admin/StoriesAdminTab";
 
 export const Admin: React.FC = () => {
   const { user, loading, isAdmin } = useAuth();
@@ -26,11 +29,11 @@ export const Admin: React.FC = () => {
 
   // Active Tab routing state
   const [activeTab, setActiveTab] = useState<
-    "analytics" | "applications" | "users" | "members" | "events" | "pricing" | "qrs" | "news" | "directory" | "board" | "password"
-  >(() => {
+    "analytics" | "applications" | "users" | "members" | "events" | "pricing" | "packages" | "qrs" | "news" | "directory" | "board" | "password" | "promos" | "stories"
+  >(()  => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    const validTabs = ["analytics", "applications", "users", "members", "events", "pricing", "qrs", "news", "directory", "board", "password"];
+    const validTabs = ["analytics", "applications", "users", "members", "events", "pricing", "packages", "qrs", "news", "directory", "board", "password", "promos", "stories"];
     return (tab && validTabs.includes(tab) ? tab : "analytics") as any;
   });
 
@@ -98,10 +101,13 @@ export const Admin: React.FC = () => {
             { id: "members", label: "Member Management", icon: UserCheck },
             { id: "events", label: "Events & Passes", icon: CalendarDays },
             { id: "pricing", label: "Membership Fees CMS", icon: CreditCard },
+            { id: "packages", label: "Package Deals CMS", icon: Package },
             { id: "qrs", label: "QR Payment CMS", icon: QrCode },
             { id: "news", label: "News & Announcements", icon: Newspaper },
             { id: "directory", label: "Business Directory", icon: Building2 },
             { id: "board", label: "Board of Directors", icon: Shield },
+            { id: "promos", label: "Promo Codes CMS", icon: Tag },
+            { id: "stories", label: "Member Stories CMS", icon: MessageSquareQuote },
             { id: "password", label: "Change Password", icon: Key },
           ].map(({ id, label, icon: Icon, count }) => (
             <button
@@ -150,10 +156,13 @@ export const Admin: React.FC = () => {
             { id: "members", label: "Members", icon: UserCheck },
             { id: "events", label: "Events", icon: CalendarDays },
             { id: "pricing", label: "Plans CMS", icon: CreditCard },
+            { id: "packages", label: "Packages CMS", icon: Package },
             { id: "qrs", label: "QR CMS", icon: QrCode },
             { id: "news", label: "News CMS", icon: Newspaper },
             { id: "directory", label: "Directory", icon: Building2 },
             { id: "board", label: "Board", icon: Shield },
+            { id: "promos", label: "Promo Codes", icon: Tag },
+            { id: "stories", label: "Stories CMS", icon: MessageSquareQuote },
             { id: "password", label: "Change Password", icon: Key },
           ].map(({ id, label, icon: Icon, count }) => (
             <button
@@ -215,10 +224,13 @@ export const Admin: React.FC = () => {
           {activeTab === "members" && <MembersTab key={refreshKey} />}
           {activeTab === "events" && <EventsTab key={refreshKey} />}
           {activeTab === "pricing" && <PricingTab key={refreshKey} />}
+          {activeTab === "packages" && <PackagesTab key={refreshKey} />}
           {activeTab === "qrs" && <QRsTab key={refreshKey} />}
           {activeTab === "news" && <NewsTab key={refreshKey} />}
           {activeTab === "directory" && <DirectoryTab key={refreshKey} />}
           {activeTab === "board" && <BoardTab key={refreshKey} />}
+          {activeTab === "promos" && <PromosTab key={refreshKey} />}
+          {activeTab === "stories" && <StoriesAdminTab key={refreshKey} />}
           {activeTab === "password" && <PasswordTab key={refreshKey} />}
         </div>
       </main>

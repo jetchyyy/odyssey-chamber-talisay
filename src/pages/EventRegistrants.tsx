@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, Search, Loader2, CalendarDays, MapPin, 
   User, Check, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Camera, X, FileDown,
-  Receipt
+  Receipt, Tag
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { supabase } from "../lib/supabase";
@@ -37,9 +37,15 @@ interface RegistrationData {
   qr_code: string;
   invoice_number?: string | null;
   created_at: string;
+  promo_code_id?: string | null;
+  discount_amount?: number | null;
+  final_amount?: number | null;
   profiles?: {
     membership_status: string;
     role: string;
+  } | null;
+  promo_codes?: {
+    code: string;
   } | null;
 }
 
@@ -328,7 +334,7 @@ const EventRegistrants: React.FC = () => {
       // 2. Fetch list with current filter and pagination
       let query = supabase
         .from("event_registrations")
-        .select("*, profiles(membership_status, role)", { count: "exact" })
+        .select("*, profiles(membership_status, role), promo_codes(code)", { count: "exact" })
         .eq("event_id", eventId);
 
       if (searchQuery.trim()) {
@@ -475,7 +481,11 @@ const EventRegistrants: React.FC = () => {
     
     // Determine user type (member vs non-member)
     const isMember = reg.profiles?.membership_status === "active" || reg.profiles?.role === "admin";
-    const ticketPrice = reg.payment_status === "free" ? 0 : (isMember ? event.price : (event.non_member_price || 0));
+    const originalPrice = isMember ? event.price : (event.non_member_price || 0);
+    const discountAmount = reg.discount_amount || 0;
+    const finalAmount = reg.final_amount !== undefined && reg.final_amount !== null ? reg.final_amount : (originalPrice - discountAmount);
+    
+    const ticketPrice = reg.payment_status === "free" ? 0 : originalPrice;
     
     // Format payment status text
     const displayStatus = reg.payment_status.toUpperCase();
@@ -716,6 +726,12 @@ const EventRegistrants: React.FC = () => {
               <span style="color: #6b7280;">Subtotal:</span>
               <span>PHP ${ticketPrice.toLocaleString()}</span>
             </div>
+            ${discountAmount > 0 ? `
+            <div class="amount-row">
+              <span style="color: #6b7280;">Discount Applied (${reg.promo_codes?.code || 'Promo Code'}):</span>
+              <span style="color: #ef4444;">- PHP ${discountAmount.toLocaleString()}</span>
+            </div>
+            ` : ''}
             <div class="amount-row">
               <span style="color: #6b7280;">Payment Method:</span>
               <span style="text-transform: capitalize;">${reg.payment_method.replace("_", " ")}</span>
@@ -730,7 +746,7 @@ const EventRegistrants: React.FC = () => {
             }
             <div class="amount-row total">
               <span>Total Paid:</span>
-              <span>PHP ${ticketPrice.toLocaleString()}</span>
+              <span>PHP ${reg.payment_status === 'free' ? '0' : finalAmount.toLocaleString()}</span>
             </div>
           </div>
 
@@ -770,7 +786,7 @@ const EventRegistrants: React.FC = () => {
       // Fetch ALL registrants for this event (alphabetical order is best for attendance sheets)
       const { data, error } = await supabase
         .from("event_registrations")
-        .select("*")
+        .select("*, promo_codes(code)")
         .eq("event_id", eventId)
         .order("full_name", { ascending: true });
 
@@ -1170,6 +1186,11 @@ const EventRegistrants: React.FC = () => {
                         {reg.payment_reference && (
                           <div className="text-[10px] text-gray-500 font-mono mt-0.5">Ref: {reg.payment_reference}</div>
                         )}
+                        {reg.discount_amount && reg.discount_amount > 0 ? (
+                          <div className="text-[10px] text-green-400 font-bold mt-1 flex items-center gap-1">
+                            <Tag size={10} /> {reg.promo_codes?.code || "Promo Discount"}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="py-4 px-4">
                         <select
@@ -1416,6 +1437,22 @@ const EventRegistrants: React.FC = () => {
                     <span className="text-gray-400">Pass Code:</span>
                     <span className="font-mono text-white">{selectedReg.qr_code}</span>
                   </div>
+                  {selectedReg.discount_amount && selectedReg.discount_amount > 0 ? (
+                    <>
+                      <div className="flex justify-between border-t border-white/5 pt-2 mt-2">
+                        <span className="text-gray-400">Promo Code Used:</span>
+                        <span className="text-green-400 font-mono font-bold bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20">{selectedReg.promo_codes?.code || "YES"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Discount Amount:</span>
+                        <span className="text-red-400">- PHP {selectedReg.discount_amount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-white">
+                        <span className="text-gray-400">Final Paid Price:</span>
+                        <span>PHP {selectedReg.final_amount?.toLocaleString()}</span>
+                      </div>
+                    </>
+                  ) : null}
                   {selectedReg.payment_proof_url && (
                     <div className="pt-2 border-t border-white/5 mt-2">
                       <span className="text-gray-400 block mb-1.5">Proof of Payment:</span>

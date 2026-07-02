@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../lib/supabase";
 import { useNotification } from "../../context/NotificationContext";
 import { 
-  Check, X, Loader2, Receipt, CheckCircle2, FileDown 
+  Check, X, Loader2, Receipt, CheckCircle2, FileDown, Tag 
 } from "lucide-react";
 
 interface ApplicationRow {
   id: string;
   user_id: string;
   membership_type: string;
+  package_availed?: string | null;
   company_name: string;
   business_category: string;
   phone: string;
@@ -20,9 +21,15 @@ interface ApplicationRow {
   status: string;
   invoice_number?: string | null;
   created_at: string;
+  promo_code_id?: string | null;
+  discount_amount?: number | null;
+  final_amount?: number | null;
   profiles?: {
     full_name: string;
     email: string;
+  } | null;
+  promo_codes?: {
+    code: string;
   } | null;
 }
 
@@ -54,9 +61,11 @@ export const ApplicationsTab: React.FC = () => {
       const { data: appsData, error } = await supabase
         .from("membership_applications")
         .select(`
-          id, user_id, membership_type, company_name, business_category, phone, business_address, 
+          id, user_id, membership_type, package_availed, company_name, business_category, phone, business_address, 
           payment_method, payment_reference, payment_proof_url, status, invoice_number, created_at,
-          profiles ( full_name, email )
+          promo_code_id, discount_amount, final_amount,
+          profiles ( full_name, email ),
+          promo_codes ( code )
         `)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -314,8 +323,11 @@ export const ApplicationsTab: React.FC = () => {
     const tierName = getPlanDisplayName(app.membership_type);
     let planPrice = 0;
     if (app.membership_type === "individual") planPrice = 1500;
-    if (app.membership_type === "sme") planPrice = 3000;
-    if (app.membership_type === "corporate") planPrice = 5000;
+    if (app.membership_type === "sme") planPrice = 5000;
+    if (app.membership_type === "corporate") planPrice = 15000;
+
+    const discountAmount = app.discount_amount || 0;
+    const finalAmount = app.final_amount !== undefined && app.final_amount !== null ? app.final_amount : (planPrice - discountAmount);
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -404,13 +416,19 @@ export const ApplicationsTab: React.FC = () => {
               <td>Subtotal:</td>
               <td class="text-right">PHP ${planPrice.toLocaleString()}.00</td>
             </tr>
+            ${discountAmount > 0 ? `
+            <tr>
+              <td>Discount Applied (${app.promo_codes?.code || 'Promo Code'}):</td>
+              <td class="text-right" style="color: #b91c1c;">- PHP ${discountAmount.toLocaleString()}.00</td>
+            </tr>
+            ` : ''}
             <tr>
               <td>Tax (Vat Exempt):</td>
               <td class="text-right">PHP 0.00</td>
             </tr>
             <tr class="grand-total">
               <td>Total Paid:</td>
-              <td class="text-right">PHP ${planPrice.toLocaleString()}.00</td>
+              <td class="text-right">PHP ${finalAmount.toLocaleString()}.00</td>
             </tr>
           </table>
         </div>
@@ -471,7 +489,14 @@ export const ApplicationsTab: React.FC = () => {
                   <div className="text-white font-bold">{app.profiles?.full_name || "N/A"}</div>
                   <div className="text-[11px] text-[#8A9690] font-normal mt-0.5">{app.profiles?.email}</div>
                 </td>
-                <td className="py-4.5">{getPlanDisplayName(app.membership_type)}</td>
+                 <td className="py-4.5">
+                  <div>{getPlanDisplayName(app.membership_type)}</div>
+                  {app.discount_amount && app.discount_amount > 0 ? (
+                    <div className="text-[10px] text-green-400 font-bold mt-0.5 flex items-center gap-1">
+                      <Tag size={10} /> {app.promo_codes?.code || "Discounted"}
+                    </div>
+                  ) : null}
+                </td>
                 <td className="py-4.5">
                   <div className="text-white">{app.company_name}</div>
                   <div className="text-[11px] text-[#8A9690] font-normal mt-0.5">{app.business_category}</div>
@@ -575,6 +600,17 @@ export const ApplicationsTab: React.FC = () => {
                     <span className="text-gray-400">Membership Tier:</span>
                     <span className="text-white">{getPlanDisplayName(selectedApp.membership_type)} Plan</span>
                   </div>
+                  {selectedApp.package_availed && (
+                    <div className="flex justify-between text-amber-400">
+                      <span className="text-gray-400">Package Availed:</span>
+                      <span className="font-bold">
+                        {selectedApp.package_availed === "package_a" ? "Package A (Small)" :
+                         selectedApp.package_availed === "package_b" ? "Package B (Medium)" :
+                         selectedApp.package_availed === "package_c" ? "Package C (Large)" :
+                         selectedApp.package_availed}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-gray-400">Payment Reference:</span>
                     <span className="font-mono text-white">{selectedApp.payment_reference || "N/A"}</span>
@@ -583,12 +619,28 @@ export const ApplicationsTab: React.FC = () => {
                     <span className="text-gray-400">Payment Method:</span>
                     <span className="capitalize text-white">{selectedApp.payment_method.replace("_", " ")}</span>
                   </div>
-                  {selectedApp.company_name && (
+                   {selectedApp.company_name && (
                     <div className="flex justify-between">
                       <span className="text-gray-400">Company:</span>
                       <span className="text-white">{selectedApp.company_name}</span>
                     </div>
                   )}
+                  {selectedApp.discount_amount && selectedApp.discount_amount > 0 ? (
+                    <>
+                      <div className="flex justify-between border-t border-white/5 pt-2 mt-2">
+                        <span className="text-gray-400">Promo Code Used:</span>
+                        <span className="text-green-400 font-mono font-bold bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20">{selectedApp.promo_codes?.code || "YES"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Discount Amount:</span>
+                        <span className="text-red-400">- PHP {selectedApp.discount_amount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-white">
+                        <span className="text-gray-400">Final Paid Price:</span>
+                        <span>PHP {selectedApp.final_amount?.toLocaleString()}</span>
+                      </div>
+                    </>
+                  ) : null}
                   {selectedApp.payment_proof_url && (
                     <div className="pt-2 border-t border-white/5 mt-2">
                       <span className="text-gray-400 block mb-1.5">Proof of Payment:</span>

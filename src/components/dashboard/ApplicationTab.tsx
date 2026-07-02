@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Building2, Phone, Map, Loader2, ArrowRight, CreditCard, Camera, Upload, QrCode } from "lucide-react";
+import { Building2, Phone, Map, Loader2, ArrowRight, CreditCard, Camera, Upload, QrCode, Tag } from "lucide-react";
 import type { PricingPlan, PaymentQR } from "./types";
 import { BUSINESS_CATEGORIES } from "./types";
 import QRDisplay from "./QRDisplay";
@@ -26,7 +26,57 @@ interface ApplicationTabProps {
   setAppPaymentProofFile: (f: File | null) => void;
   appPaymentProofPreview: string;
   setAppPaymentProofPreview: (v: string) => void;
+  // Promo props
+  promoCode: string; setPromoCode: (v: string) => void;
+  appliedPromo: any; setAppliedPromo: (p: any) => void;
+  onApplyPromo: () => Promise<void>;
+  promoLoading: boolean;
+  promoError: string | null;
+  discountAmount: number;
+  finalPrice: number;
 }
+
+const packagePlans = [
+  {
+    id: "package_a",
+    type: "package_a",
+    name: "Package A: Small Enterprise",
+    price: 2900,
+    period: "yr",
+    description: "Combines Small annual membership (discounted to ₱1,700) with 4 Coffee Connections session passes (₱1,200). Total value: ₱4,000.",
+    benefits: [
+      "Small / Individual Annual Membership (₱1,700)",
+      "4 Coffee Connections passes (₱300 per session = ₱1,200)",
+      "Total savings of ₱1,100"
+    ]
+  },
+  {
+    id: "package_b",
+    type: "package_b",
+    name: "Package B: Medium Enterprise",
+    price: 3800,
+    period: "yr",
+    description: "Combines Medium annual membership (discounted to ₱2,600) with 4 Coffee Connections session passes (₱1,200). Total value: ₱5,000.",
+    benefits: [
+      "Medium / SME Annual Membership (₱2,600)",
+      "4 Coffee Connections passes (₱300 per session = ₱1,200)",
+      "Total savings of ₱1,200"
+    ]
+  },
+  {
+    id: "package_c",
+    type: "package_c",
+    name: "Package C: Large Enterprise",
+    price: 4700,
+    period: "yr",
+    description: "Combines Large annual membership (discounted to ₱3,500) with 4 Coffee Connections session passes (₱1,200). Total value: ₱6,000.",
+    benefits: [
+      "Large / Corporate Annual Membership (₱3,500)",
+      "4 Coffee Connections passes (₱300 per session = ₱1,200)",
+      "Total savings of ₱1,300"
+    ]
+  }
+];
 
 const ApplicationTab: React.FC<ApplicationTabProps> = ({
   plans, selectedPlan, onSelectPlan,
@@ -40,6 +90,10 @@ const ApplicationTab: React.FC<ApplicationTabProps> = ({
   paymentReference, setPaymentReference,
   appPaymentProofFile, setAppPaymentProofFile,
   appPaymentProofPreview, setAppPaymentProofPreview,
+  promoCode, setPromoCode,
+  appliedPromo, setAppliedPromo,
+  onApplyPromo, promoLoading, promoError,
+  discountAmount, finalPrice,
 }) => {
   const inputCls = "w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:bg-white focus:border-green-500 outline-none transition-all";
 
@@ -48,30 +102,70 @@ const ApplicationTab: React.FC<ApplicationTabProps> = ({
       {/* Left: Step 1 + Step 2 */}
       <div className="lg:col-span-2 space-y-6">
         {/* Step 1 — Plan selector */}
-        <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-[0_4px_30px_rgba(0,0,0,0.02)]">
-          <span className="label-pill mb-3 inline-flex">Step 1</span>
-          <h2 className="text-xl font-heading font-black text-[#0D1A14] mb-2">Select a Membership Plan</h2>
-          <p className="text-sm text-gray-500 mb-8">Choose the plan that suits your business profile. Tiers are defined below.</p>
+        <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-[0_4px_30px_rgba(0,0,0,0.02)] space-y-8">
+          <div>
+            <span className="label-pill mb-3 inline-flex">Step 1</span>
+            <h2 className="text-xl font-heading font-black text-[#0D1A14] mb-2">Select a Membership Plan</h2>
+            <p className="text-sm text-gray-500 mb-6">Choose the plan that suits your business profile. Regular annual plans are listed first.</p>
 
-          <div className="grid sm:grid-cols-3 gap-4">
-            {plans.map((plan) => (
-              <div
-                key={plan.id}
-                onClick={() => onSelectPlan(plan)}
-                className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col ${
-                  selectedPlan?.id === plan.id
-                    ? "border-green-700 bg-green-50/20"
-                    : "border-gray-100 hover:border-green-200 bg-white"
-                }`}
-              >
-                <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-gray-400 mb-1">{plan.name}</span>
-                <span className="text-xl font-heading font-black text-gray-900 mb-2">PHP {plan.price.toLocaleString()}</span>
-                <p className="text-[11px] text-gray-400 line-clamp-3 mb-4 leading-normal flex-1">{plan.description}</p>
-                <div className="text-[11px] font-semibold text-green-700 flex items-center gap-1 mt-auto">
-                  Select Tier <ArrowRight size={10} />
+            <div className="grid sm:grid-cols-3 gap-4">
+              {plans.map((plan) => (
+                <div
+                  key={plan.id}
+                  onClick={() => {
+                    onSelectPlan(plan);
+                    setAppliedPromo(null);
+                    setPromoCode("");
+                  }}
+                  className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col ${
+                    selectedPlan?.id === plan.id
+                      ? "border-green-700 bg-green-50/20"
+                      : "border-gray-100 hover:border-green-200 bg-white"
+                  }`}
+                >
+                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-gray-400 mb-1">{plan.name}</span>
+                  <span className="text-xl font-heading font-black text-gray-900 mb-2">PHP {plan.price.toLocaleString()}</span>
+                  <p className="text-[11px] text-gray-400 line-clamp-3 mb-4 leading-normal flex-1">{plan.description}</p>
+                  <div className="text-[11px] font-semibold text-green-700 flex items-center gap-1 mt-auto">
+                    Select Plan <ArrowRight size={10} />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-6 border-t border-gray-100">
+            <h3 className="text-base font-heading font-black text-[#0D1A14] mb-2">Special Membership Package Deals</h3>
+            <p className="text-xs text-gray-500 mb-6">These packages bundle the membership fee with Coffee Connections session passes at a discounted rate.</p>
+
+            <div className="grid sm:grid-cols-3 gap-4">
+              {packagePlans.map((plan) => (
+                <div
+                  key={plan.id}
+                  onClick={() => {
+                    onSelectPlan(plan as any);
+                    setAppliedPromo(null);
+                    setPromoCode("");
+                  }}
+                  className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col relative overflow-hidden ${
+                    selectedPlan?.id === plan.id
+                      ? "border-green-700 bg-green-50/20"
+                      : "border-gray-100 hover:border-green-200 bg-white"
+                  }`}
+                >
+                  <div className="absolute top-0 right-0 bg-green-700 text-white text-[8px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-bl">
+                    Package Deal
+                  </div>
+                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-gray-400 mb-1">Package</span>
+                  <h4 className="font-heading font-black text-[12px] text-gray-900 leading-tight mb-1 pr-12">{plan.name}</h4>
+                  <span className="text-lg font-heading font-black text-green-700 mb-2">PHP {plan.price.toLocaleString()}</span>
+                  <p className="text-[11px] text-gray-400 mb-4 leading-relaxed flex-1">{plan.description}</p>
+                  <div className="text-[11px] font-semibold text-green-700 flex items-center gap-1 mt-auto">
+                    Select Package <ArrowRight size={10} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -84,47 +178,63 @@ const ApplicationTab: React.FC<ApplicationTabProps> = ({
           >
             <span className="label-pill mb-3 inline-flex">Step 2</span>
             <h2 className="text-xl font-heading font-black text-[#0D1A14] mb-2">Payment Details</h2>
-            <p className="text-sm text-gray-500 mb-6">
-              Send your membership fee of{" "}
-              <span className="font-bold text-green-700">PHP {selectedPlan.price.toLocaleString()}</span>{" "}
-              via GCash or Bank Transfer using the credentials below.
-            </p>
+            
+            {finalPrice > 0 ? (
+              <>
+                <p className="text-sm text-gray-500 mb-6">
+                  Send your membership fee of{" "}
+                  <span className="font-bold text-green-700">PHP {finalPrice.toLocaleString()}</span>{" "}
+                  {discountAmount > 0 && <span className="text-xs text-gray-450 line-through">(originally PHP {selectedPlan.price.toLocaleString()})</span>}{" "}
+                  via GCash or Bank Transfer using the credentials below.
+                </p>
 
-            {/* Payment method toggle */}
-            <div className="flex gap-2.5 mb-6">
-              {paymentMethods.map((pay) => (
-                <button
-                  key={pay.id}
-                  onClick={() => onSelectPayment(pay)}
-                  className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${
-                    selectedPayment?.id === pay.id
-                      ? "bg-[#0D1A14] text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {pay.name}
-                </button>
-              ))}
-            </div>
+                {/* Payment method toggle */}
+                <div className="flex gap-2.5 mb-6">
+                  {paymentMethods.map((pay) => (
+                    <button
+                      key={pay.id}
+                      onClick={() => onSelectPayment(pay)}
+                      className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${
+                        selectedPayment?.id === pay.id
+                          ? "bg-[#0D1A14] text-white"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      {pay.name}
+                    </button>
+                  ))}
+                </div>
 
-            {selectedPayment && (
-              <div className="p-5 rounded-2xl bg-gray-50/70 border border-gray-100 space-y-4">
-                <div className="flex flex-col sm:flex-row gap-5">
-                  {/* Large QR panel */}
-                  <div className="flex flex-col items-center gap-2 flex-shrink-0">
-                    <QRDisplay qr={selectedPayment} lightboxId="app-qr-lightbox" />
-                    <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
-                      <QrCode size={12} /> Scan with GCash/Bank App
-                    </span>
-                  </div>
-                  {/* Instructions */}
-                  <div className="flex flex-col justify-center flex-1">
-                    <h4 className="font-heading font-bold text-gray-900 mb-2 text-sm">{selectedPayment.name}</h4>
-                    <p className="text-xs text-gray-500 leading-relaxed mb-3">{selectedPayment.description}</p>
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 text-xs text-gray-700 font-mono whitespace-pre-line leading-relaxed">
-                      {selectedPayment.payment_instructions}
+                {selectedPayment && (
+                  <div className="p-5 rounded-2xl bg-gray-50/70 border border-gray-100 space-y-4">
+                    <div className="flex flex-col sm:flex-row gap-5">
+                      {/* Large QR panel */}
+                      <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                        <QRDisplay qr={selectedPayment} lightboxId="app-qr-lightbox" />
+                        <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
+                          <QrCode size={12} /> Scan with GCash/Bank App
+                        </span>
+                      </div>
+                      {/* Instructions */}
+                      <div className="flex flex-col justify-center flex-1">
+                        <h4 className="font-heading font-bold text-gray-900 mb-2 text-sm">{selectedPayment.name}</h4>
+                        <p className="text-xs text-gray-500 leading-relaxed mb-3">{selectedPayment.description}</p>
+                        <div className="bg-white p-4 rounded-xl border border-gray-200 text-xs text-gray-700 font-mono whitespace-pre-line leading-relaxed">
+                          {selectedPayment.payment_instructions}
+                        </div>
+                      </div>
                     </div>
                   </div>
+                )}
+              </>
+            ) : (
+              <div className="p-5 rounded-2xl bg-green-50 border border-green-200 text-xs text-green-800 font-bold flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-green-500/10 text-green-600">
+                  <Tag size={16} />
+                </div>
+                <div>
+                  <h4 className="font-black">Free Membership Registration Applied</h4>
+                  <p className="font-normal text-[11px] text-green-700 mt-0.5">Your applied promotional code has reduced the membership registration fee to PHP 0. GCash scan proof is bypassed. Simply submit the form on the right.</p>
                 </div>
               </div>
             )}
@@ -195,49 +305,117 @@ const ApplicationTab: React.FC<ApplicationTabProps> = ({
               </div>
             </div>
 
-            {/* Payment Reference */}
-            <div className="pt-2 border-t border-gray-100">
-              <label className="block text-[11px] font-heading font-bold text-gray-500 uppercase mb-1">Payment Reference Number *</label>
-              <div className="relative">
-                <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-                <input type="text" required placeholder="GCash Ref / Bank Transaction ID" value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} className={inputCls} />
-              </div>
-            </div>
-
-            {/* Proof of Payment */}
-            <div className="pt-2 border-t border-gray-100">
-              <label className="block text-[11px] font-heading font-bold text-gray-500 uppercase mb-1">Proof of Payment Image *</label>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  {appPaymentProofPreview ? (
-                    <img src={appPaymentProofPreview} alt="Payment proof preview" className="w-full h-full object-cover" />
+            {/* Promo Code Input (Conditional on Selected Plan) */}
+            {selectedPlan && (
+              <div className="pt-2 border-t border-gray-100">
+                <label className="block text-[11px] font-heading font-bold text-gray-500 uppercase mb-1">Promotional Discount Code</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter Promo Code"
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                    disabled={!!appliedPromo || promoLoading}
+                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none uppercase font-mono tracking-wider focus:bg-white focus:border-green-500 transition-all disabled:opacity-60"
+                  />
+                  {appliedPromo ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppliedPromo(null);
+                        setPromoCode("");
+                      }}
+                      className="px-3.5 py-2 rounded-xl border border-red-200 hover:bg-red-50 text-red-500 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Clear
+                    </button>
                   ) : (
-                    <Camera size={18} className="text-gray-400" />
+                    <button
+                      type="button"
+                      onClick={onApplyPromo}
+                      disabled={promoLoading || !promoCode.trim()}
+                      className="px-3.5 py-2 rounded-xl bg-green-700 hover:bg-green-600 disabled:bg-gray-300 text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center min-w-[64px]"
+                    >
+                      {promoLoading ? <Loader2 size={12} className="animate-spin" /> : "Apply"}
+                    </button>
                   )}
                 </div>
-                <div className="flex-1">
-                  <label
-                    htmlFor="app-proof-upload"
-                    className="cursor-pointer flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 border border-gray-200 hover:border-green-500 rounded-xl text-[11px] font-bold text-gray-600 transition-colors w-full"
-                  >
-                    <Upload size={12} />
-                    {appPaymentProofFile ? appPaymentProofFile.name : "Select Receipt Image"}
-                  </label>
-                  <input
-                    id="app-proof-upload"
-                    type="file" accept="image/*" required
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setAppPaymentProofFile(file);
-                        setAppPaymentProofPreview(URL.createObjectURL(file));
-                      }
-                    }}
-                  />
+                {promoError && (
+                  <p className="text-[10px] text-red-500 mt-1 font-semibold">{promoError}</p>
+                )}
+                {appliedPromo && (
+                  <p className="text-[10px] text-green-600 mt-1 font-bold flex items-center gap-1">
+                    ✓ Code Applied: {appliedPromo.code} ({appliedPromo.discount_type === 'percentage' ? `${appliedPromo.discount_value}%` : `PHP ${appliedPromo.discount_value.toLocaleString()}`} Off)
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Price breakdown */}
+            {selectedPlan && discountAmount > 0 && (
+              <div className="p-3 rounded-2xl bg-green-50/50 border border-green-200 text-[11px] space-y-1 font-semibold text-green-800">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Plan Price:</span>
+                  <span>PHP {selectedPlan.price.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-red-600 font-bold">
+                  <span>Discount:</span>
+                  <span>- PHP {discountAmount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs font-black border-t border-green-200 pt-1.5 mt-1 text-[#0D1A14]">
+                  <span>Total Amount Due:</span>
+                  <span>PHP {finalPrice.toLocaleString()}</span>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Payment Reference */}
+            {finalPrice > 0 && (
+              <div className="pt-2 border-t border-gray-100">
+                <label className="block text-[11px] font-heading font-bold text-gray-500 uppercase mb-1">Payment Reference Number *</label>
+                <div className="relative">
+                  <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                  <input type="text" required placeholder="GCash Ref / Bank Transaction ID" value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+            )}
+
+            {/* Proof of Payment */}
+            {finalPrice > 0 && (
+              <div className="pt-2 border-t border-gray-100">
+                <label className="block text-[11px] font-heading font-bold text-gray-500 uppercase mb-1">Proof of Payment Image *</label>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {appPaymentProofPreview ? (
+                      <img src={appPaymentProofPreview} alt="Payment proof preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <Camera size={18} className="text-gray-400" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label
+                      htmlFor="app-proof-upload"
+                      className="cursor-pointer flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 border border-gray-200 hover:border-green-500 rounded-xl text-[11px] font-bold text-gray-600 transition-colors w-full"
+                    >
+                      <Upload size={12} />
+                      {appPaymentProofFile ? appPaymentProofFile.name : "Select Receipt Image"}
+                    </label>
+                    <input
+                      id="app-proof-upload"
+                      type="file" accept="image/*" required
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setAppPaymentProofFile(file);
+                          setAppPaymentProofPreview(URL.createObjectURL(file));
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <button
               type="submit"

@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Building2, Shield, Loader2, Mail, Phone, Globe, MapPin } from "lucide-react";
+import { Building2, Shield, Loader2, Mail, Phone, Globe, MapPin, Upload } from "lucide-react";
 import { BUSINESS_CATEGORIES } from "./types";
 
 // Inline social icons (kept local to avoid extra deps)
@@ -42,6 +42,8 @@ interface DirectoryTabProps {
   dirCat: string; setDirCat: (v: string) => void;
   dirOtherCatText: string; setDirOtherCatText: (v: string) => void;
   dirAddress: string; setDirAddress: (v: string) => void;
+  dirLogoFile: File | null; setDirLogoFile: (f: File | null) => void;
+  dirLogoPreview: string; setDirLogoPreview: (v: string) => void;
 }
 
 const DirectoryTab: React.FC<DirectoryTabProps> = (props) => {
@@ -52,6 +54,7 @@ const DirectoryTab: React.FC<DirectoryTabProps> = (props) => {
     dirWeb, setDirWeb, dirFacebook, setDirFacebook,
     dirInstagram, setDirInstagram, dirCat, setDirCat,
     dirOtherCatText, setDirOtherCatText, dirAddress, setDirAddress,
+    dirLogoFile, setDirLogoFile, dirLogoPreview, setDirLogoPreview,
   } = props;
 
   const inputCls = "w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:bg-white focus:border-green-500 outline-none transition-all";
@@ -109,6 +112,43 @@ const DirectoryTab: React.FC<DirectoryTabProps> = (props) => {
           )}
 
           <form onSubmit={onSubmit} className="space-y-4">
+            {/* Business Logo Upload */}
+            <div className="p-5 bg-gray-50/50 border border-gray-150 rounded-[1.5rem] flex flex-col sm:flex-row items-center gap-5">
+              <div className="w-16 h-16 rounded-2xl bg-white border border-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm">
+                {dirLogoPreview ? (
+                  <img src={dirLogoPreview} alt="Logo preview" className="w-full h-full object-contain p-1.5" />
+                ) : (
+                  <Building2 size={24} className="text-gray-400" />
+                )}
+              </div>
+              <div className="flex-1 text-center sm:text-left">
+                <label className="block text-[11px] font-heading font-bold text-gray-500 uppercase mb-1.5">Business Logo</label>
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <label
+                    htmlFor="dir-logo-upload"
+                    className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 hover:border-green-500 rounded-xl text-gray-700 text-xs font-semibold shadow-sm hover:shadow transition-all"
+                  >
+                    <Upload size={14} className="text-gray-550" />
+                    {dirLogoFile ? dirLogoFile.name : (dirLogoPreview ? "Replace Logo" : "Upload Logo")}
+                  </label>
+                  <input
+                    id="dir-logo-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setDirLogoFile(file);
+                        setDirLogoPreview(URL.createObjectURL(file));
+                      }
+                    }}
+                  />
+                  <p className="text-[10px] text-gray-400 font-normal">PNG, JPG or SVG. Max 2MB recommended.</p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid sm:grid-cols-2 gap-4">
               {/* Business Name */}
               <div>

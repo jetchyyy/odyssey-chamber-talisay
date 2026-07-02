@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { supabase } from "../lib/supabase";
-import { Loader2, Mail, ArrowRight, CreditCard, CalendarDays, Building2, Newspaper, Key, LogOut, Shield } from "lucide-react";
+import { Loader2, Mail, ArrowRight, CreditCard, CalendarDays, Building2, Newspaper, Key, LogOut, Shield, MessageSquareQuote } from "lucide-react";
 import { uploadImage } from "../lib/storage";
 
 // Sub-components
@@ -16,6 +16,7 @@ import NewsTab from "../components/dashboard/NewsTab";
 import NewsSubmitModal from "../components/dashboard/NewsSubmitModal";
 import PasswordTab from "../components/dashboard/PasswordTab";
 import RenewalModal from "../components/dashboard/RenewalModal";
+import MemberStoriesTab from "../components/dashboard/StoriesTab";
 import type { PricingPlan, PaymentQR, RegisteredEvent } from "../components/dashboard/types";
 import { getPlanDisplayName, BUSINESS_CATEGORIES } from "../components/dashboard/types";
 
@@ -63,12 +64,15 @@ const Dashboard: React.FC = () => {
   const [dirOtherCatText, setDirOtherCatText] = useState("");
   const [dirAddress, setDirAddress] = useState("");
   const [approvalStatus, setApprovalStatus] = useState<"approved" | "pending_approval">("approved");
+  const [dirLogoUrl, setDirLogoUrl] = useState("");
+  const [dirLogoFile, setDirLogoFile] = useState<File | null>(null);
+  const [dirLogoPreview, setDirLogoPreview] = useState("");
 
   // ── Loader and query states ──────────────────────────────────────────────
   const [actionLoading, setActionLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [registeredEvents, setRegisteredEvents] = useState<RegisteredEvent[]>([]);
-  const [activeTab, setActiveTab] = useState<"card" | "events" | "directory" | "news" | "settings">("card");
+  const [activeTab, setActiveTab] = useState<"card" | "events" | "directory" | "news" | "stories" | "settings">("card");
 
   // ── Password change states ───────────────────────────────────────────────
   const [oldPassword, setOldPassword] = useState("");
@@ -89,6 +93,137 @@ const Dashboard: React.FC = () => {
   const [appPaymentProofPreview, setAppPaymentProofPreview] = useState("");
   const [renewalPaymentProofFile, setRenewalPaymentProofFile] = useState<File | null>(null);
   const [renewalPaymentProofPreview, setRenewalPaymentProofPreview] = useState("");
+
+  // ── Promo code states ─────────────────────────────────────────────────────
+  const [appPromoCode, setAppPromoCode] = useState("");
+  const [appAppliedPromo, setAppAppliedPromo] = useState<any>(null);
+  const [appPromoLoading, setAppPromoLoading] = useState(false);
+  const [appPromoError, setAppPromoError] = useState<string | null>(null);
+
+  const appDiscountAmount = appAppliedPromo && selectedPlan
+    ? (appAppliedPromo.discount_type === "percentage"
+        ? Math.min(selectedPlan.price, (selectedPlan.price * appAppliedPromo.discount_value) / 100)
+        : Math.min(selectedPlan.price, appAppliedPromo.discount_value))
+    : 0;
+  const appFinalPrice = selectedPlan ? Math.max(0, selectedPlan.price - appDiscountAmount) : 0;
+
+  const [renewPromoCode, setRenewPromoCode] = useState("");
+  const [renewAppliedPromo, setRenewAppliedPromo] = useState<any>(null);
+  const [renewPromoLoading, setRenewPromoLoading] = useState(false);
+  const [renewPromoError, setRenewPromoError] = useState<string | null>(null);
+
+  const planToRenew = renewalPlan || plans.find((p) => p.type === profile?.membership_type);
+
+  const renewDiscountAmount = renewAppliedPromo && planToRenew
+    ? (renewAppliedPromo.discount_type === "percentage"
+        ? Math.min(planToRenew.price, (planToRenew.price * renewAppliedPromo.discount_value) / 100)
+        : Math.min(planToRenew.price, renewAppliedPromo.discount_value))
+    : 0;
+  const renewFinalPrice = planToRenew ? Math.max(0, planToRenew.price - renewDiscountAmount) : 0;
+
+  const handleApplyAppPromo = async () => {
+    if (!appPromoCode.trim() || !selectedPlan) return;
+    setAppPromoLoading(true);
+    setAppPromoError(null);
+    try {
+      const { data, error } = await supabase
+        .from("promo_codes")
+        .select("*")
+        .eq("code", appPromoCode.trim().toUpperCase())
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) {
+        setAppPromoError("Invalid promo code.");
+        setAppAppliedPromo(null);
+        return;
+      }
+
+      if (!data.is_active) {
+        setAppPromoError("This promo code is inactive.");
+        setAppAppliedPromo(null);
+        return;
+      }
+
+      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+        setAppPromoError("This promo code has expired.");
+        setAppAppliedPromo(null);
+        return;
+      }
+
+      if (data.max_uses !== null && data.uses_count >= data.max_uses) {
+        setAppPromoError("Usage limit reached.");
+        setAppAppliedPromo(null);
+        return;
+      }
+
+      if (data.applicable_to !== "all" && data.applicable_to !== "membership") {
+        setAppPromoError("Not applicable to memberships.");
+        setAppAppliedPromo(null);
+        return;
+      }
+
+      setAppAppliedPromo(data);
+      toast.success("Promo code applied!");
+    } catch (err: any) {
+      setAppPromoError(err.message || "Failed to validate promo code.");
+      setAppAppliedPromo(null);
+    } finally {
+      setAppPromoLoading(false);
+    }
+  };
+
+  const handleApplyRenewPromo = async () => {
+    if (!renewPromoCode.trim() || !planToRenew) return;
+    setRenewPromoLoading(true);
+    setRenewPromoError(null);
+    try {
+      const { data, error } = await supabase
+        .from("promo_codes")
+        .select("*")
+        .eq("code", renewPromoCode.trim().toUpperCase())
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) {
+        setRenewPromoError("Invalid promo code.");
+        setRenewAppliedPromo(null);
+        return;
+      }
+
+      if (!data.is_active) {
+        setRenewPromoError("This promo code is inactive.");
+        setRenewAppliedPromo(null);
+        return;
+      }
+
+      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+        setRenewPromoError("This promo code has expired.");
+        setRenewAppliedPromo(null);
+        return;
+      }
+
+      if (data.max_uses !== null && data.uses_count >= data.max_uses) {
+        setRenewPromoError("Usage limit reached.");
+        setRenewAppliedPromo(null);
+        return;
+      }
+
+      if (data.applicable_to !== "all" && data.applicable_to !== "membership") {
+        setRenewPromoError("Not applicable to memberships.");
+        setRenewAppliedPromo(null);
+        return;
+      }
+
+      setRenewAppliedPromo(data);
+      toast.success("Promo code applied!");
+    } catch (err: any) {
+      setRenewPromoError(err.message || "Failed to validate promo code.");
+      setRenewAppliedPromo(null);
+    } finally {
+      setRenewPromoLoading(false);
+    }
+  };
 
   // ── News submission states ───────────────────────────────────────────────
   const [myNews, setMyNews] = useState<any[]>([]);
@@ -184,6 +319,9 @@ const Dashboard: React.FC = () => {
         } else { setDirCat(""); setDirOtherCatText(""); }
         setDirAddress(displayData.address || "");
         setApprovalStatus(dirData.approval_status || "approved");
+        setDirLogoUrl(displayData.logo_url || "");
+        setDirLogoPreview(displayData.logo_url || "");
+        setDirLogoFile(null);
       } else {
         setDirName(profile?.company_name || "");
         setDirPhone(profile?.phone || "");
@@ -195,6 +333,9 @@ const Dashboard: React.FC = () => {
         } else { setDirCat(""); setDirOtherCatText(""); }
         setDirAddress(profile?.business_address || "");
         setApprovalStatus("approved");
+        setDirLogoUrl("");
+        setDirLogoPreview("");
+        setDirLogoFile(null);
       }
 
       // 5. News submissions
@@ -233,34 +374,87 @@ const Dashboard: React.FC = () => {
     setPaymentMethodName(pay.name.toLowerCase().includes("gcash") ? "gcash" : "bank_transfer");
   };
 
+
+
   const handleSubmitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile || !user) return;
     if (!selectedPlan) { setFormError("Please select a membership plan."); return; }
-    if (!paymentReference) { setFormError("Please fill in your payment reference number."); return; }
-    if (!appPaymentProofFile) { setFormError("Please upload an image of your payment receipt as proof."); return; }
+
+    const finalPrice = appFinalPrice;
+    const discountAmount = appDiscountAmount;
+
+    if (finalPrice > 0) {
+      if (!paymentReference) { setFormError("Please fill in your payment reference number."); return; }
+      if (!appPaymentProofFile) { setFormError("Please upload an image of your payment receipt as proof."); return; }
+    }
+
     const finalCategory = businessCategory === "Other" ? otherCategoryText.trim() : businessCategory;
     if (!finalCategory) { setFormError("Please select a business category or specify one."); return; }
     setActionLoading(true);
     setFormError(null);
     try {
-      const proofUrl = await uploadImage(appPaymentProofFile, "payment-proofs");
+      let proofUrl = null;
+      if (finalPrice > 0 && appPaymentProofFile) {
+        proofUrl = await uploadImage(appPaymentProofFile, "payment-proofs");
+      }
+
+      let mappedMembershipType = selectedPlan.type;
+      let packageAvailed = null;
+
+      if (selectedPlan.id === "package_a") {
+        mappedMembershipType = "individual";
+        packageAvailed = "package_a";
+      } else if (selectedPlan.id === "package_b") {
+        mappedMembershipType = "sme";
+        packageAvailed = "package_b";
+      } else if (selectedPlan.id === "package_c") {
+        mappedMembershipType = "corporate";
+        packageAvailed = "package_c";
+      }
+
       const { error: appError } = await supabase.from("membership_applications").insert({
-        user_id: user.id, membership_type: selectedPlan.type, company_name: companyName,
-        business_category: finalCategory, phone, business_address: businessAddress,
-        payment_method: paymentMethodName, payment_reference: paymentReference,
-        payment_proof_url: proofUrl, status: "pending", payment_status: "pending",
+        user_id: user.id, 
+        membership_type: mappedMembershipType, 
+        package_availed: packageAvailed,
+        company_name: companyName,
+        business_category: finalCategory, 
+        phone, 
+        business_address: businessAddress,
+        payment_method: finalPrice === 0 ? "free" : paymentMethodName, 
+        payment_reference: finalPrice === 0 ? "PROMO-FREE" : paymentReference,
+        payment_proof_url: proofUrl, 
+        status: "pending", 
+        payment_status: finalPrice === 0 ? "free" : "pending",
+        promo_code_id: appAppliedPromo ? appAppliedPromo.id : null,
+        discount_amount: discountAmount,
+        final_amount: finalPrice,
       });
       if (appError) throw appError;
+
+      // Securely increment promo code usage count if applied
+      if (appAppliedPromo) {
+        const { error: rpcError } = await supabase.rpc("increment_promo_uses", {
+          p_code_id: appAppliedPromo.id
+        });
+        if (rpcError) console.warn("Failed to increment promo uses count:", rpcError.message);
+      }
+
       const { error: profileError } = await supabase.from("profiles").update({
-        membership_status: "pending", membership_type: selectedPlan.type,
-        company_name: companyName, business_category: finalCategory, phone, business_address: businessAddress,
+        membership_status: "pending", 
+        membership_type: mappedMembershipType,
+        company_name: companyName, 
+        business_category: finalCategory, 
+        phone, 
+        business_address: businessAddress,
       }).eq("id", user.id);
       if (profileError) throw profileError;
       await refetchProfile();
       setSelectedPlan(null);
       setAppPaymentProofFile(null);
       setAppPaymentProofPreview("");
+      setAppAppliedPromo(null);
+      setAppPromoCode("");
     } catch (err: any) {
       setFormError(err.message || "Failed to submit application.");
     } finally {
@@ -273,26 +467,59 @@ const Dashboard: React.FC = () => {
     if (!profile || !user) return;
     const planToRenew = renewalPlan || plans.find((p) => p.type === profile.membership_type);
     if (!planToRenew) { toast.error("Please select a membership plan for renewal."); return; }
-    if (!renewalPaymentRef) { toast.error("Please fill in your payment reference number."); return; }
-    if (!renewalPaymentProofFile) { toast.error("Please upload an image of your payment receipt as proof."); return; }
+
+    const finalPrice = renewFinalPrice;
+    const discountAmount = renewDiscountAmount;
+
+    if (finalPrice > 0) {
+      if (!renewalPaymentRef) { toast.error("Please fill in your payment reference number."); return; }
+      if (!renewalPaymentProofFile) { toast.error("Please upload an image of your payment receipt as proof."); return; }
+    }
+
     setActionLoading(true);
     try {
-      const proofUrl = await uploadImage(renewalPaymentProofFile, "payment-proofs");
+      let proofUrl = null;
+      if (finalPrice > 0 && renewalPaymentProofFile) {
+        proofUrl = await uploadImage(renewalPaymentProofFile, "payment-proofs");
+      }
+
       const { error: appError } = await supabase.from("membership_applications").insert({
         user_id: user.id, membership_type: planToRenew.type,
         company_name: profile.company_name, business_category: profile.business_category,
         phone: profile.phone, business_address: profile.business_address,
-        payment_method: renewalPaymentMethod || (paymentMethods.length > 0 ? (paymentMethods[0].name.toLowerCase().includes("gcash") ? "gcash" : "bank_transfer") : "gcash"),
-        payment_reference: renewalPaymentRef, payment_proof_url: proofUrl,
-        status: "pending", payment_status: "pending",
+        payment_method: finalPrice === 0 
+          ? "free" 
+          : (renewalPaymentMethod || (paymentMethods.length > 0 ? (paymentMethods[0].name.toLowerCase().includes("gcash") ? "gcash" : "bank_transfer") : "gcash")),
+        payment_reference: finalPrice === 0 ? "PROMO-FREE" : renewalPaymentRef, 
+        payment_proof_url: proofUrl,
+        status: "pending", 
+        payment_status: finalPrice === 0 ? "free" : "pending",
+        promo_code_id: renewAppliedPromo ? renewAppliedPromo.id : null,
+        discount_amount: discountAmount,
+        final_amount: finalPrice,
       });
       if (appError) throw appError;
+
+      // Securely increment promo code usage count if applied
+      if (renewAppliedPromo) {
+        const { error: rpcError } = await supabase.rpc("increment_promo_uses", {
+          p_code_id: renewAppliedPromo.id
+        });
+        if (rpcError) console.warn("Failed to increment promo uses count:", rpcError.message);
+      }
+
       setHasPendingRenewal(true);
       setShowRenewalModal(false);
       setRenewalPaymentRef("");
       setRenewalPaymentProofFile(null);
       setRenewalPaymentProofPreview("");
-      toast.success("Renewal payment reference and proof submitted! Our admin team will verify it soon.");
+      setRenewAppliedPromo(null);
+      setRenewPromoCode("");
+      toast.success(
+        finalPrice === 0 
+          ? "Renewal application submitted successfully via promotional discount! No payment verification needed."
+          : "Renewal payment reference and proof submitted! Our admin team will verify it soon."
+      );
     } catch (err: any) {
       toast.error(err.message || "Failed to submit renewal application.");
     } finally {
@@ -332,16 +559,33 @@ const Dashboard: React.FC = () => {
     setFormError(null);
     try {
       if (hasListing && listingId) {
+        let finalLogoUrl = dirLogoUrl;
+        if (dirLogoFile) {
+          try {
+            finalLogoUrl = await uploadImage(dirLogoFile, "directory-logos");
+          } catch (uploadErr: any) {
+            setFormError("Logo upload failed: " + uploadErr.message);
+            setActionLoading(false);
+            return;
+          }
+        }
+
         const { error } = await supabase.from("business_directory").update({
           pending_changes: {
             business_name: dirName, description: dirDesc, contact_email: dirEmail,
             contact_phone: dirPhone, website_url: dirWeb,
             facebook_url: dirFacebook.trim() || null, instagram_url: dirInstagram.trim() || null,
             category: finalDirCategory, address: dirAddress,
+            logo_url: finalLogoUrl || null,
           },
           approval_status: "pending_approval",
         }).eq("id", listingId);
         if (error) throw error;
+
+        setDirLogoUrl(finalLogoUrl);
+        setDirLogoPreview(finalLogoUrl);
+        setDirLogoFile(null);
+
         setApprovalStatus("pending_approval");
         toast.success("Proposed edits submitted for administrator approval!");
       } else {
@@ -508,6 +752,11 @@ const Dashboard: React.FC = () => {
           paymentReference={paymentReference} setPaymentReference={setPaymentReference}
           appPaymentProofFile={appPaymentProofFile} setAppPaymentProofFile={setAppPaymentProofFile}
           appPaymentProofPreview={appPaymentProofPreview} setAppPaymentProofPreview={setAppPaymentProofPreview}
+          promoCode={appPromoCode} setPromoCode={setAppPromoCode}
+          appliedPromo={appAppliedPromo} setAppliedPromo={setAppAppliedPromo}
+          onApplyPromo={handleApplyAppPromo} promoLoading={appPromoLoading}
+          promoError={appPromoError} discountAmount={appDiscountAmount}
+          finalPrice={appFinalPrice}
         />
       )}
 
@@ -613,6 +862,7 @@ const Dashboard: React.FC = () => {
                 { id: "events", icon: <CalendarDays size={16} />, label: `Registered Events (${registeredEvents.length})` },
                 { id: "directory", icon: <Building2 size={16} />, label: "Business Directory Profile" },
                 { id: "news", icon: <Newspaper size={16} />, label: `News Submissions (${myNews.length})` },
+                { id: "stories", icon: <MessageSquareQuote size={16} />, label: "My Member Stories" },
                 { id: "settings", icon: <Key size={16} />, label: "Change Password" },
               ] as const).map((tab) => (
                 <button
@@ -653,6 +903,8 @@ const Dashboard: React.FC = () => {
                     dirCat={dirCat} setDirCat={setDirCat}
                     dirOtherCatText={dirOtherCatText} setDirOtherCatText={setDirOtherCatText}
                     dirAddress={dirAddress} setDirAddress={setDirAddress}
+                    dirLogoFile={dirLogoFile} setDirLogoFile={setDirLogoFile}
+                    dirLogoPreview={dirLogoPreview} setDirLogoPreview={setDirLogoPreview}
                   />
                 )}
 
@@ -665,6 +917,8 @@ const Dashboard: React.FC = () => {
                     onDelete={handleDeleteNewsSubmission}
                   />
                 )}
+
+                {activeTab === "stories" && <MemberStoriesTab key="stories" />}
 
                 {activeTab === "settings" && (
                   <PasswordTab
@@ -701,7 +955,12 @@ const Dashboard: React.FC = () => {
 
       {/* ── Renewal Modal ───────────────────────────────────────────────── */}
       <RenewalModal
-        open={showRenewalModal} onClose={() => setShowRenewalModal(false)}
+        open={showRenewalModal} 
+        onClose={() => {
+          setShowRenewalModal(false);
+          setRenewAppliedPromo(null);
+          setRenewPromoCode("");
+        }}
         plans={plans} renewalPlan={renewalPlan} setRenewalPlan={setRenewalPlan}
         paymentMethods={paymentMethods}
         renewalSelectedPayment={renewalSelectedPayment}
@@ -711,6 +970,11 @@ const Dashboard: React.FC = () => {
         renewalPaymentProofFile={renewalPaymentProofFile} setRenewalPaymentProofFile={setRenewalPaymentProofFile}
         renewalPaymentProofPreview={renewalPaymentProofPreview} setRenewalPaymentProofPreview={setRenewalPaymentProofPreview}
         actionLoading={actionLoading} onSubmit={handleRenewalSubmit}
+        promoCode={renewPromoCode} setPromoCode={setRenewPromoCode}
+        appliedPromo={renewAppliedPromo} setAppliedPromo={setRenewAppliedPromo}
+        onApplyPromo={handleApplyRenewPromo} promoLoading={renewPromoLoading}
+        promoError={renewPromoError} discountAmount={renewDiscountAmount}
+        finalPrice={renewFinalPrice}
       />
     </div>
   );

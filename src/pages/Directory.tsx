@@ -16,17 +16,18 @@ interface BusinessListing {
   logo_url?: string | null;
   facebook_url?: string | null;
   instagram_url?: string | null;
+  description?: string | null;
 }
 
 const fallbackDirectory = [
-  { id: "f1", business_name: "Santos Trading Co.", category: "Retail", address: "Poblacion, Talisay City", contact_phone: "(032) 234-5678", contact_email: "info@santostrading.com", website_url: "santostrading.com" },
-  { id: "f2", business_name: "CR Construction & Dev", category: "Construction", address: "Lawaan I, Talisay City", contact_phone: "(032) 456-7890", contact_email: "projects@crconstruct.com", website_url: "crconstruct.com" },
-  { id: "f3", business_name: "Graceland Restaurant Group", category: "Food & Beverage", address: "Tabunok, Talisay City", contact_phone: "(032) 345-6789", contact_email: "hello@graceland.ph", website_url: "graceland.ph" },
-  { id: "f4", business_name: "Cruz & Reyes Law", category: "Professional Services", address: "Bulacao, Talisay City", contact_phone: "(032) 567-8901", contact_email: "legal@cruzreyes.com", website_url: "cruzreyes.com" },
-  { id: "f5", business_name: "Talisay Medical Center", category: "Healthcare", address: "San Isidro, Talisay City", contact_phone: "(032) 678-9012", contact_email: "admin@talisaymed.com", website_url: "talisaymed.com" },
-  { id: "f6", business_name: "Visayas Tech Solutions", category: "IT & Tech", address: "Dumlog, Talisay City", contact_phone: "(032) 789-0123", contact_email: "contact@visayastech.com", website_url: "visayastech.com" },
-  { id: "f7", business_name: "Cebu South Logistics", category: "Logistics", address: "Tank, Talisay City", contact_phone: "(032) 890-1234", contact_email: "operations@cebusouth.ph", website_url: "cebusouth.ph" },
-  { id: "f8", business_name: "Green Earth Agri-Farm", category: "Agriculture", address: "Camp 4, Talisay City", contact_phone: "(032) 901-2345", contact_email: "farm@greenearth.ph", website_url: "greenearth.ph" },
+  { id: "f1", business_name: "Santos Trading Co.", category: "Retail", address: "Poblacion, Talisay City", contact_phone: "(032) 234-5678", contact_email: "info@santostrading.com", website_url: "santostrading.com", description: "Santos Trading Co. is a leading retail supplier of premium household goods, local agricultural products, and consumer merchandise. Serving the Talisay community for over 15 years with dedication." },
+  { id: "f2", business_name: "CR Construction & Dev", category: "Construction", address: "Lawaan I, Talisay City", contact_phone: "(032) 456-7890", contact_email: "projects@crconstruct.com", website_url: "crconstruct.com", description: "CR Construction & Dev specializes in civil engineering, commercial building development, structural renovations, and public infrastructure projects. We build the future with quality and integrity." },
+  { id: "f3", business_name: "Graceland Restaurant Group", category: "Food & Beverage", address: "Tabunok, Talisay City", contact_phone: "(032) 345-6789", contact_email: "hello@graceland.ph", website_url: "graceland.ph", description: "Graceland Restaurant Group offers a delightful culinary experience featuring local Filipino delicacies, fresh seafood, and modern fusion cuisine. Perfect for family gatherings and corporate celebrations." },
+  { id: "f4", business_name: "Cruz & Reyes Law", category: "Professional Services", address: "Bulacao, Talisay City", contact_phone: "(032) 567-8901", contact_email: "legal@cruzreyes.com", website_url: "cruzreyes.com", description: "Cruz & Reyes Law provides comprehensive legal representation in corporate law, family disputes, real estate transactions, and intellectual property. Trustworthy counsel for all your legal needs." },
+  { id: "f5", business_name: "Talisay Medical Center", category: "Healthcare", address: "San Isidro, Talisay City", contact_phone: "(032) 678-9012", contact_email: "admin@talisaymed.com", website_url: "talisaymed.com", description: "Talisay Medical Center is a state-of-the-art healthcare facility providing 24/7 emergency services, specialized outpatient clinics, and comprehensive diagnostic laboratory services." },
+  { id: "f6", business_name: "Visayas Tech Solutions", category: "IT & Tech", address: "Dumlog, Talisay City", contact_phone: "(032) 789-0123", contact_email: "contact@visayastech.com", website_url: "visayastech.com", description: "Visayas Tech Solutions delivers customized software development, cloud infrastructure management, network security audits, and IT consulting services for small and medium enterprises." },
+  { id: "f7", business_name: "Cebu South Logistics", category: "Logistics", address: "Tank, Talisay City", contact_phone: "(032) 890-1234", contact_email: "operations@cebusouth.ph", website_url: "cebusouth.ph", description: "Cebu South Logistics offers nationwide freight forwarding, secure warehousing, cold chain storage, and last-mile delivery services with tracking." },
+  { id: "f8", business_name: "Green Earth Agri-Farm", category: "Agriculture", address: "Camp 4, Talisay City", contact_phone: "(032) 901-2345", contact_email: "farm@greenearth.ph", website_url: "greenearth.ph", description: "Green Earth Agri-Farm is a pioneer in sustainable organic farming, cultivating fresh highland vegetables, herbs, and organic honey while promoting environment-friendly agricultural practices." },
 ];
 
 
@@ -65,6 +66,15 @@ const Directory: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const cardsPerPage = 9;
+
+  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
 
   // Dynamically extract all unique categories from active listings
   const categories = React.useMemo(() => {
@@ -171,88 +181,119 @@ const Directory: React.FC = () => {
         ) : (
           <div>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {paginated.map((biz, i) => (
-                <motion.div 
-                  key={biz.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="spotlight-card rounded-[1.5rem] p-6 group flex flex-col relative overflow-hidden"
-                >
-                  {/* Business logo — upper right */}
-                  {biz.logo_url && (
-                    <div className="absolute top-4 right-4 w-14 h-14 rounded-2xl bg-white/90 backdrop-blur-sm shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-white/40 flex items-center justify-center overflow-hidden transition-all duration-300 group-hover:scale-105 group-hover:shadow-[0_12px_40px_rgb(0,0,0,0.12)]">
-                      <img
-                        src={biz.logo_url}
-                        alt={`${biz.business_name} logo`}
-                        className="w-full h-full object-contain p-2"
-                      />
+              {paginated.map((biz, i) => {
+                const isExpanded = !!expandedIds[biz.id];
+                const hasLongDescription = !!(biz.description && biz.description.length > 120);
+                return (
+                  <motion.div 
+                    key={biz.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (target.closest("a") || target.closest("button")) {
+                        return;
+                      }
+                      if (hasLongDescription) {
+                        toggleExpand(biz.id);
+                      }
+                    }}
+                    className={`spotlight-card rounded-[1.5rem] p-6 group flex flex-col relative overflow-hidden transition-all duration-300 ${
+                      hasLongDescription ? "cursor-pointer hover:shadow-md" : ""
+                    }`}
+                  >
+                    {/* Business logo — upper right */}
+                    {biz.logo_url && (
+                      <div className="absolute top-4 right-4 w-14 h-14 rounded-2xl bg-white/90 backdrop-blur-sm shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-white/40 flex items-center justify-center overflow-hidden transition-all duration-300 group-hover:scale-105 group-hover:shadow-[0_12px_40px_rgb(0,0,0,0.12)]">
+                        <img
+                          src={biz.logo_url}
+                          alt={`${biz.business_name} logo`}
+                          className="w-full h-full object-contain p-2"
+                        />
+                      </div>
+                    )}
+
+                    <div className={`mb-4 ${biz.logo_url ? "pr-[72px]" : ""}`}>
+                      <span className="text-[10px] font-heading font-semibold px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-100 mb-3 inline-block">
+                        {biz.category}
+                      </span>
+                      <h3 className="font-heading font-bold text-lg text-[#0D1A14] leading-tight group-hover:text-green-700 transition-colors">
+                        {biz.business_name}
+                      </h3>
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-2">
+                        <MapPin size={12} className="text-gray-400" /> {biz.address}
+                      </div>
                     </div>
-                  )}
 
-                  <div className={`mb-4 ${biz.logo_url ? "pr-[72px]" : ""}`}>
-                    <span className="text-[10px] font-heading font-semibold px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-100 mb-3 inline-block">
-                      {biz.category}
-                    </span>
-                    <h3 className="font-heading font-bold text-lg text-[#0D1A14] leading-tight group-hover:text-green-700 transition-colors">
-                      {biz.business_name}
-                    </h3>
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-2">
-                      <MapPin size={12} className="text-gray-400" /> {biz.address}
+                    {/* Business Description */}
+                    {biz.description && (
+                      <p className="text-xs text-gray-650 mb-4 leading-relaxed select-none">
+                        {isExpanded
+                          ? biz.description
+                          : hasLongDescription
+                          ? `${biz.description.substring(0, 120)}...`
+                          : biz.description}
+                        {hasLongDescription && (
+                          <span className="text-green-700 font-bold hover:underline ml-1 inline-block">
+                            {isExpanded ? "Show Less" : "Read More"}
+                          </span>
+                        )}
+                      </p>
+                    )}
+
+                    <div className="space-y-2.5 mt-auto pt-4 border-t border-gray-50">
+                      {biz.contact_phone && (
+                        <div className="flex items-center gap-2.5 text-[13px] text-gray-600">
+                          <Phone size={14} className="text-gray-400" /> {biz.contact_phone}
+                        </div>
+                      )}
+                      {biz.contact_email && (
+                        <div className="flex items-center gap-2.5 text-[13px] text-gray-600">
+                          <Mail size={14} className="text-gray-400" /> {biz.contact_email}
+                        </div>
+                      )}
+                      {biz.website_url && (
+                        <div className="flex items-center gap-2.5 text-[13px] text-green-700 font-medium mt-1">
+                          <Globe size={14} className="text-green-600" /> 
+                          <a href={normaliseUrl(biz.website_url)} target="_blank" rel="noreferrer" className="hover:underline flex items-center gap-1">
+                            {biz.website_url} <ExternalLink size={10} />
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Social links */}
+                      {(biz.facebook_url || biz.instagram_url) && (
+                        <div className="flex items-center gap-3 pt-1">
+                          {biz.facebook_url && (
+                            <a
+                              href={normaliseUrl(biz.facebook_url)}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Facebook page"
+                              className="flex items-center gap-1.5 text-[12px] text-[#4267B2] hover:underline font-medium transition-opacity hover:opacity-80"
+                            >
+                              <FacebookIcon /> Facebook
+                            </a>
+                          )}
+                          {biz.instagram_url && (
+                            <a
+                              href={normaliseUrl(biz.instagram_url)}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Instagram profile"
+                              className="flex items-center gap-1.5 text-[12px] font-medium transition-opacity hover:opacity-80"
+                              style={{ color: "#dc2743" }}
+                            >
+                              <InstagramIcon /> Instagram
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </div>
-
-                  <div className="space-y-2.5 mt-auto pt-4 border-t border-gray-50">
-                    {biz.contact_phone && (
-                      <div className="flex items-center gap-2.5 text-[13px] text-gray-600">
-                        <Phone size={14} className="text-gray-400" /> {biz.contact_phone}
-                      </div>
-                    )}
-                    {biz.contact_email && (
-                      <div className="flex items-center gap-2.5 text-[13px] text-gray-600">
-                        <Mail size={14} className="text-gray-400" /> {biz.contact_email}
-                      </div>
-                    )}
-                    {biz.website_url && (
-                      <div className="flex items-center gap-2.5 text-[13px] text-green-700 font-medium mt-1">
-                        <Globe size={14} className="text-green-600" /> 
-                        <a href={normaliseUrl(biz.website_url)} target="_blank" rel="noreferrer" className="hover:underline flex items-center gap-1">
-                          {biz.website_url} <ExternalLink size={10} />
-                        </a>
-                      </div>
-                    )}
-
-                    {/* Social links */}
-                    {(biz.facebook_url || biz.instagram_url) && (
-                      <div className="flex items-center gap-3 pt-1">
-                        {biz.facebook_url && (
-                          <a
-                            href={normaliseUrl(biz.facebook_url)}
-                            target="_blank"
-                            rel="noreferrer"
-                            title="Facebook page"
-                            className="flex items-center gap-1.5 text-[12px] text-[#4267B2] hover:underline font-medium transition-opacity hover:opacity-80"
-                          >
-                            <FacebookIcon /> Facebook
-                          </a>
-                        )}
-                        {biz.instagram_url && (
-                          <a
-                            href={normaliseUrl(biz.instagram_url)}
-                            target="_blank"
-                            rel="noreferrer"
-                            title="Instagram profile"
-                            className="flex items-center gap-1.5 text-[12px] font-medium transition-opacity hover:opacity-80"
-                            style={{ color: "#dc2743" }}
-                          >
-                            <InstagramIcon /> Instagram
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </div>
 
             {/* Pagination Controls */}

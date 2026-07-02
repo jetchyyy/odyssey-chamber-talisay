@@ -4,7 +4,7 @@ import type { Variants } from "framer-motion";
 import { 
   CalendarDays, MapPin, Clock, ArrowRight, Newspaper, 
   ArrowUpRight, Loader2, CheckCircle2, QrCode, CreditCard, X,
-  Camera, Upload, ChevronLeft, ChevronRight
+  Camera, Upload, ChevronLeft, ChevronRight, Tag
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { supabase } from "../../lib/supabase";
@@ -119,6 +119,81 @@ export const EventsSection: React.FC = () => {
   const [guestEmail, setGuestEmail] = useState("");
   const [regQrCodePass, setRegQrCodePass] = useState("");
 
+  // Promo code states
+  const [promoCode, setPromoCode] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<any>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+
+  // Package Credit States
+  const [userCredits, setUserCredits] = useState<any[]>([]);
+  const [usePackagePass, setUsePackagePass] = useState(false);
+  const [creditsLoading, setCreditsLoading] = useState(false);
+
+  const isMember = user && profile?.membership_status === "active";
+  const originalPrice = selectedEvent ? (isMember ? selectedEvent.price : (selectedEvent.non_member_price || 0)) : 0;
+
+  const discountAmount = appliedPromo && selectedEvent
+    ? (appliedPromo.discount_type === "percentage"
+        ? Math.min(originalPrice, (originalPrice * appliedPromo.discount_value) / 100)
+        : Math.min(originalPrice, appliedPromo.discount_value))
+    : 0;
+  const finalPrice = selectedEvent 
+    ? (usePackagePass ? 0 : Math.max(0, originalPrice - discountAmount)) 
+    : 0;
+
+  const handleApplyPromo = async () => {
+    if (!promoCode.trim() || !selectedEvent) return;
+    setPromoLoading(true);
+    setPromoError(null);
+    try {
+      const { data, error } = await supabase
+        .from("promo_codes")
+        .select("*")
+        .eq("code", promoCode.trim().toUpperCase())
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) {
+        setPromoError("Invalid promo code.");
+        setAppliedPromo(null);
+        return;
+      }
+
+      if (!data.is_active) {
+        setPromoError("This promo code is inactive.");
+        setAppliedPromo(null);
+        return;
+      }
+
+      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+        setPromoError("This promo code has expired.");
+        setAppliedPromo(null);
+        return;
+      }
+
+      if (data.max_uses !== null && data.uses_count >= data.max_uses) {
+        setPromoError("Usage limit reached.");
+        setAppliedPromo(null);
+        return;
+      }
+
+      if (data.applicable_to !== "all" && data.applicable_to !== "event") {
+        setPromoError("Not applicable to events.");
+        setAppliedPromo(null);
+        return;
+      }
+
+      setAppliedPromo(data);
+      toast.success("Promo code applied!");
+    } catch (err: any) {
+      setPromoError(err.message || "Failed to validate promo code.");
+      setAppliedPromo(null);
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -153,6 +228,8 @@ export const EventsSection: React.FC = () => {
     fetchEvents();
   }, []);
 
+
+
   useEffect(() => {
     if (!selectedEvent) return;
     const fetchPaymentDetails = async () => {
@@ -166,13 +243,43 @@ export const EventsSection: React.FC = () => {
         console.error(err);
       }
     };
+    
+    const fetchPackageCredits = async () => {
+      if (!user || !selectedEvent.allow_package_redemption) {
+        setUserCredits([]);
+        setUsePackagePass(false);
+        return;
+      }
+      setCreditsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("member_package_credits")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("benefit_type", "coffee_connections")
+          .gt("remaining_credits", 0)
+          .limit(1);
+        if (!error && data && data.length > 0) {
+          setUserCredits(data);
+          setUsePackagePass(true); // default to checked
+        } else {
+          setUserCredits([]);
+          setUsePackagePass(false);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setCreditsLoading(false);
+      }
+    };
+
     fetchPaymentDetails();
-  }, [selectedEvent]);
+    fetchPackageCredits();
+  }, [selectedEvent, user]);
 
   const activeEvents = hasFetchedEvents ? dbEvents : fallbackEvents;
   const featured = activeEvents.find(e => e.is_featured) || activeEvents[0];
   const rest = activeEvents.filter(e => e.id !== (featured?.id));
-
   const handleRegisterClick = (evt: any) => {
     setSelectedEvent(evt);
     setGuestName("");
@@ -183,6 +290,22 @@ export const EventsSection: React.FC = () => {
     setPaymentProofFile(null);
     setPaymentProofPreview("");
     setRegQrCodePass("");
+    setAppliedPromo(null);
+    setPromoCode("");
+  };
+
+  const handleCloseRegModal = () => {
+    setSelectedEvent(null);
+    setGuestName("");
+    setGuestEmail("");
+    setRegSuccess(false);
+    setRegError(null);
+    setPaymentReference("");
+    setPaymentProofFile(null);
+    setPaymentProofPreview("");
+    setRegQrCodePass("");
+    setAppliedPromo(null);
+    setPromoCode("");
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
@@ -198,17 +321,18 @@ export const EventsSection: React.FC = () => {
       return;
     }
 
-    const isMember = user && profile?.membership_status === "active";
-    const applicablePrice = isMember ? selectedEvent.price : (selectedEvent.non_member_price || 0);
+    const priceAfterDiscount = finalPrice;
+    const currentDiscountAmount = discountAmount;
 
-    if (applicablePrice > 0 && !paymentReference) {
-      setRegError("Please input your transaction reference number.");
-      return;
-    }
-
-    if (applicablePrice > 0 && !paymentProofFile) {
-      setRegError("Please upload an image of your payment receipt as proof.");
-      return;
+    if (priceAfterDiscount > 0) {
+      if (!paymentReference) {
+        setRegError("Please input your transaction reference number.");
+        return;
+      }
+      if (!paymentProofFile) {
+        setRegError("Please upload an image of your payment receipt as proof.");
+        return;
+      }
     }
 
     setRegLoading(true);
@@ -216,7 +340,7 @@ export const EventsSection: React.FC = () => {
 
     try {
       let proofUrl = null;
-      if (applicablePrice > 0 && paymentProofFile) {
+      if (priceAfterDiscount > 0 && paymentProofFile) {
         proofUrl = await uploadImage(paymentProofFile, "payment-proofs");
       }
 
@@ -228,11 +352,15 @@ export const EventsSection: React.FC = () => {
         user_id: user ? user.id : null,
         full_name: regName,
         email: regEmail,
-        payment_method: applicablePrice === 0 ? "free" : (selectedPayment?.name.toLowerCase().includes("gcash") ? "gcash" : "bank_transfer"),
-        payment_reference: applicablePrice === 0 ? "FREE-REG" : paymentReference,
-        payment_status: applicablePrice === 0 ? "free" : "pending",
+        payment_method: usePackagePass ? "package" : (priceAfterDiscount === 0 ? "free" : (selectedPayment?.name.toLowerCase().includes("gcash") ? "gcash" : "bank_transfer")),
+        payment_reference: usePackagePass ? "PACKAGE-CREDIT" : (priceAfterDiscount === 0 ? "PROMO-FREE" : paymentReference),
+        payment_status: usePackagePass ? "free" : (priceAfterDiscount === 0 ? "free" : "pending"),
         attendance_status: "registered",
         qr_code: qrPassCode,
+        promo_code_id: appliedPromo ? appliedPromo.id : null,
+        discount_amount: currentDiscountAmount,
+        final_amount: priceAfterDiscount,
+        used_package_credit_id: usePackagePass ? userCredits[0].id : null,
       };
 
       if (proofUrl) {
@@ -242,9 +370,19 @@ export const EventsSection: React.FC = () => {
       const { error } = await supabase.from("event_registrations").insert(regData);
       if (error) throw error;
 
+      // Securely increment promo code usage count if applied
+      if (appliedPromo) {
+        const { error: rpcError } = await supabase.rpc("increment_promo_uses", {
+          p_code_id: appliedPromo.id
+        });
+        if (rpcError) console.warn("Failed to increment promo uses count:", rpcError.message);
+      }
+
       setRegSuccess(true);
       setPaymentProofFile(null);
       setPaymentProofPreview("");
+      setAppliedPromo(null);
+      setPromoCode("");
     } catch (err: any) {
       setRegError(err.message || "Failed to submit event registration.");
     } finally {
@@ -386,7 +524,7 @@ export const EventsSection: React.FC = () => {
                     </div>
                     <h4 className="font-heading font-black text-gray-900 text-base mb-2">Registration Submitted!</h4>
                     <p className="text-xs text-gray-500 leading-relaxed mb-6 max-w-sm">
-                      {applicablePrice > 0 
+                      {finalPrice > 0 
                         ? "Your payment reference is submitted for verification. Please save/download your QR Check-In Pass below to present at the venue."
                         : "Your free check-in pass has been generated! Save it below and present it at the venue entrance."}
                     </p>
@@ -466,7 +604,9 @@ export const EventsSection: React.FC = () => {
                         </div>
                         <div className="text-right">
                           <span className="text-green-700 font-black text-sm">
-                            {applicablePrice === 0 ? "Free Event" : `PHP ${applicablePrice.toLocaleString()}`}
+                            {applicablePrice === 0 ? "Free Event" : (
+                              finalPrice === 0 ? "Free Applied" : `PHP ${finalPrice.toLocaleString()}`
+                            )}
                           </span>
                           <div className="text-[9px] text-gray-400 mt-0.5">
                             {isMember ? `Standard rate: PHP ${guestPrice.toLocaleString()}` : `Member rate: PHP ${memberPrice.toLocaleString()}`}
@@ -502,7 +642,121 @@ export const EventsSection: React.FC = () => {
                       </div>
                     )}
 
-                    {applicablePrice > 0 && (
+                    {/* Package Credits Redemption Selector */}
+                    {userCredits.length > 0 && (
+                      <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 space-y-2 mb-4">
+                        <div className="flex items-start gap-2.5">
+                          <input
+                            type="checkbox"
+                            id="use_package_pass_chk"
+                            checked={usePackagePass}
+                            onChange={(e) => {
+                              setUsePackagePass(e.target.checked);
+                              if (e.target.checked) {
+                                // Clear promo code if redeeming pass
+                                setAppliedPromo(null);
+                                setPromoCode("");
+                              }
+                            }}
+                            className="rounded border-gray-300 text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer mt-0.5"
+                          />
+                          <div className="flex-1">
+                            <label htmlFor="use_package_pass_chk" className="font-heading font-black text-xs text-[#5C3E14] cursor-pointer block select-none">
+                              Use Coffee Connections Package Credit
+                            </label>
+                            <p className="text-[10px] text-amber-700 font-semibold mt-0.5 leading-normal">
+                              You have <span className="font-bold text-amber-800">{userCredits[0].remaining_credits} passes</span> remaining in your package. Checking this will redeem 1 pass for this event.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Promo Code Input */}
+                    {!usePackagePass && applicablePrice > 0 && (
+                      <div className="pt-2 border-t border-gray-100">
+                        <label className="block text-[11px] font-heading font-bold text-gray-500 uppercase mb-1">Promotional Discount Code</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Enter Promo Code"
+                            value={promoCode}
+                            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                            disabled={!!appliedPromo || promoLoading}
+                            className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none uppercase font-mono tracking-wider focus:bg-white focus:border-green-500 transition-all disabled:opacity-60"
+                          />
+                          {appliedPromo ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAppliedPromo(null);
+                                setPromoCode("");
+                              }}
+                              className="px-3.5 py-2 rounded-xl border border-red-200 hover:bg-red-50 text-red-500 text-xs font-bold transition-all cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleApplyPromo}
+                              disabled={promoLoading || !promoCode.trim()}
+                              className="px-3.5 py-2 rounded-xl bg-green-700 hover:bg-green-600 disabled:bg-gray-300 text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center min-w-[64px]"
+                            >
+                              {promoLoading ? <Loader2 size={12} className="animate-spin" /> : "Apply"}
+                            </button>
+                          )}
+                        </div>
+                        {promoError && (
+                          <p className="text-[10px] text-red-500 mt-1 font-semibold">{promoError}</p>
+                        )}
+                        {appliedPromo && (
+                          <p className="text-[10px] text-green-600 mt-1 font-bold flex items-center gap-1">
+                            ✓ Code Applied: {appliedPromo.code} ({appliedPromo.discount_type === 'percentage' ? `${appliedPromo.discount_value}%` : `PHP ${appliedPromo.discount_value.toLocaleString()}`} Off)
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Price breakdown */}
+                    {applicablePrice > 0 && discountAmount > 0 && (
+                      <div className="p-3 rounded-2xl bg-green-50/50 border border-green-200 text-[11px] space-y-1 font-semibold text-green-800">
+                        <div className="flex justify-between">
+                          <span className="text-gray-505">Admission rate:</span>
+                          <span>PHP {applicablePrice.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-red-600 font-bold">
+                          <span>Discount:</span>
+                          <span>- PHP {discountAmount.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-xs font-black border-t border-green-200 pt-1.5 mt-1 text-[#0D1A14]">
+                          <span>Total Amount Due:</span>
+                          <span>PHP {finalPrice.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    )}
+
+
+
+                    {applicablePrice > 0 && finalPrice === 0 && (
+                      <div className="p-5 rounded-2xl bg-green-50 border border-green-200 text-xs text-green-800 font-bold flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-green-500/10 text-green-600">
+                          <Tag size={16} />
+                        </div>
+                        <div>
+                          <h4 className="font-black">
+                            {usePackagePass ? "Redeeming Package Credit" : "Free Event Entry Applied"}
+                          </h4>
+                          <p className="font-normal text-[10px] text-green-700 mt-0.5">
+                            {usePackagePass
+                              ? "Your membership package credit will be redeemed for this event. GCash payment proof is bypassed. Simply submit the form below."
+                              : "Your applied promotional code has reduced the entry fee to PHP 0. GCash scan proof is bypassed. Simply submit the form below."}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {finalPrice > 0 && (
                       <div className="space-y-4 border-t border-gray-100 pt-4">
                         <div className="flex justify-between items-center">
                           <span className="text-xs font-heading font-bold text-gray-700">Choose Channel for Payment:</span>

@@ -22,6 +22,7 @@ interface EventRow {
   image_url?: string | null;
   is_featured: boolean;
   is_archived: boolean;
+  allow_package_redemption?: boolean;
   created_at?: string;
 }
 
@@ -52,6 +53,7 @@ export const EventsTab: React.FC = () => {
   const [eventImg, setEventImg] = useState("");
   const [eventImgFile, setEventImgFile] = useState<File | null>(null);
   const [eventFeatured, setEventFeatured] = useState(false);
+  const [eventAllowPackageRedemption, setEventAllowPackageRedemption] = useState(false);
 
   // QR Modal states
   const [showShareModal, setShowShareModal] = useState(false);
@@ -90,6 +92,7 @@ export const EventsTab: React.FC = () => {
     setEventImg("");
     setEventImgFile(null);
     setEventFeatured(false);
+    setEventAllowPackageRedemption(false);
   };
 
   const handleSaveEvent = async (e: React.FormEvent) => {
@@ -119,6 +122,7 @@ export const EventsTab: React.FC = () => {
         tag: eventTag,
         tag_color: computedColor,
         is_featured: eventFeatured,
+        allow_package_redemption: eventAllowPackageRedemption,
         image_url: finalImgUrl || "https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=900&auto=format&fit=crop",
       };
 
@@ -358,6 +362,7 @@ export const EventsTab: React.FC = () => {
                   setEventImg(evt.image_url || "");
                   setEventImgFile(null);
                   setEventFeatured(evt.is_featured);
+                  setEventAllowPackageRedemption(evt.allow_package_redemption || false);
                   setShowEventModal(true);
                 }}
                 className="p-2 rounded-lg border border-white/5 bg-white/[0.01] hover:bg-white/5 text-gray-300 cursor-pointer"
@@ -575,6 +580,17 @@ export const EventsTab: React.FC = () => {
                     className="rounded border-white/10 text-green-600 focus:ring-green-500 w-4 h-4 cursor-pointer bg-[#101D17]"
                   />
                   <label htmlFor="featured_evt" className="cursor-pointer text-[#ECEFEF]">Feature this event on public pages</label>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="allow_package_red_evt"
+                    checked={eventAllowPackageRedemption}
+                    onChange={(e) => setEventAllowPackageRedemption(e.target.checked)}
+                    className="rounded border-white/10 text-green-600 focus:ring-green-500 w-4 h-4 cursor-pointer bg-[#101D17]"
+                  />
+                  <label htmlFor="allow_package_red_evt" className="cursor-pointer text-[#ECEFEF]">Allow Membership Package Passes (e.g. Coffee Connections passes)</label>
                 </div>
 
                 <div className="flex gap-2.5 pt-4 border-t border-white/5">

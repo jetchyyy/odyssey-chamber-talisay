@@ -5,7 +5,7 @@ import { useNotification } from "../../context/NotificationContext";
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
 import { 
-  Search, Plus, Edit2, Loader2, Upload, Trash2, X, ChevronLeft, ChevronRight, UserPlus, UserCheck, Copy 
+  Search, Plus, Edit2, Loader2, Upload, Trash2, X, ChevronLeft, ChevronRight, UserPlus, UserCheck, Copy, Sparkles 
 } from "lucide-react";
 import type { Profile } from "../../context/AuthContext";
 
@@ -48,6 +48,8 @@ export const MembersTab: React.FC = () => {
   // Edit Expiry / details states
   const [showEditMemberModal, setShowEditMemberModal] = useState(false);
   const [editingMember, setEditingMember] = useState<Profile | null>(null);
+  const [memberCredits, setMemberCredits] = useState<any[]>([]);
+  const [creditsLoading, setCreditsLoading] = useState(false);
   const [editMemberExpiresAt, setEditMemberExpiresAt] = useState("");
 
   // Excel Import states
@@ -286,67 +288,21 @@ export const MembersTab: React.FC = () => {
         return;
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-      const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-          detectSessionInUrl: false
-        }
-      });
-
-      const { data: authData, error: authError } = await tempClient.auth.signUp({
-        email: newMemberEmail.trim(),
-        password: newMemberPassword,
-        options: {
-          data: {
-            full_name: newMemberName.trim(),
-            company_name: newMemberCompany.trim(),
-            role: "member",
-          }
-        }
-      });
-
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Failed to create user account. No user data returned.");
-
       let expiryDate = new Date();
       expiryDate.setFullYear(expiryDate.getFullYear() + 1);
 
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
-          membership_status: "active",
-          membership_type: newMemberPlan,
-          company_name: newMemberCompany.trim() || null,
-          phone: newMemberPhone.trim() || null,
-          business_address: newMemberAddress.trim() || null,
-          business_category: newMemberCategory || null,
-          expires_at: expiryDate.toISOString()
-        })
-        .eq("id", authData.user.id);
+      const { data: newUserId, error: rpcError } = await supabase.rpc("admin_import_member", {
+        p_email: newMemberEmail.trim(),
+        p_password: newMemberPassword,
+        p_full_name: newMemberName.trim(),
+        p_company_name: newMemberCompany.trim() || null,
+        p_membership_type: newMemberPlan,
+        p_phone: newMemberPhone.trim() || null,
+        p_business_address: newMemberAddress.trim() || null,
+        p_expires_at: expiryDate.toISOString()
+      });
 
-      if (profileError) throw profileError;
-
-      if (newMemberCompany.trim()) {
-        const { error: dirError } = await supabase
-          .from("business_directory")
-          .insert({
-            user_id: authData.user.id,
-            business_name: newMemberCompany.trim(),
-            description: `Registered Chamber Member business specializing in ${newMemberCategory || "commerce"}.`,
-            contact_email: newMemberEmail.trim(),
-            contact_phone: newMemberPhone.trim() || null,
-            category: newMemberCategory || "Retail",
-            address: newMemberAddress.trim() || "Talisay City",
-            is_verified: true,
-            is_featured: false,
-            approval_status: "approved",
-            pending_changes: null
-          });
-        if (dirError) console.error("Error creating auto-directory listing:", dirError.message);
-      }
+      if (rpcError) throw rpcError;
 
       setCreatedCreds({
         name: newMemberName.trim(),
@@ -444,7 +400,7 @@ export const MembersTab: React.FC = () => {
     }
   };
 
-  const handleEditMemberClick = (member: Profile) => {
+  const handleEditMemberClick = async (member: Profile) => {
     setEditingMember(member);
     setNewMemberName(member.full_name || "");
     setNewMemberCompany(member.company_name || "");
@@ -457,7 +413,24 @@ export const MembersTab: React.FC = () => {
     } else {
       setEditMemberExpiresAt("");
     }
+    
+    // Fetch their package credits
+    setMemberCredits([]);
+    setCreditsLoading(true);
     setShowEditMemberModal(true);
+    try {
+      const { data, error } = await supabase
+        .from("member_package_credits")
+        .select("*")
+        .eq("user_id", member.id);
+      if (!error && data) {
+        setMemberCredits(data);
+      }
+    } catch (err) {
+      console.error("Error loading member credits:", err);
+    } finally {
+      setCreditsLoading(false);
+    }
   };
 
   // Filter Members
@@ -1021,6 +994,37 @@ export const MembersTab: React.FC = () => {
                     className="w-full px-3 py-2 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none focus:border-green-500 transition-colors font-semibold"
                   />
                   <p className="text-[10px] text-gray-500 mt-1">Leave blank or modify to set when this membership will expire.</p>
+                </div>
+
+                {/* Package Credits Section */}
+                <div className="pt-4 border-t border-white/5 space-y-3">
+                  <h4 className="font-heading font-black text-white text-xs flex items-center gap-1.5">
+                    <Sparkles className="text-amber-400" size={14} />
+                    Active Package Passes / Credits
+                  </h4>
+                  {creditsLoading ? (
+                    <div className="flex items-center gap-2 text-gray-500 py-1 text-xs">
+                      <Loader2 className="animate-spin" size={12} /> Loading credit balances...
+                    </div>
+                  ) : memberCredits.length > 0 ? (
+                    <div className="space-y-2">
+                      {memberCredits.map((credit) => (
+                        <div key={credit.id} className="p-3 bg-white/[0.02] border border-white/5 rounded-xl flex items-center justify-between">
+                          <div>
+                            <p className="text-white text-[11px] font-bold">{credit.package_name}</p>
+                            <p className="text-[10px] text-gray-400 capitalize">Benefit: {credit.benefit_type.replace("_", " ")}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                              {credit.remaining_credits} / {credit.total_credits} Remaining
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-[10px] italic">No active package session credits for this member.</p>
+                  )}
                 </div>
 
                 <div className="flex gap-2.5 pt-4 border-t border-white/5">
