@@ -4,7 +4,7 @@ import type { Variants } from "framer-motion";
 import { 
   CalendarDays, MapPin, Clock, ArrowRight, Newspaper, 
   ArrowUpRight, Loader2, CheckCircle2, QrCode, CreditCard, X,
-  Camera, Upload, ChevronLeft, ChevronRight, Tag, Eye, EyeOff
+  Camera, Upload, ChevronLeft, ChevronRight, Tag, Eye, EyeOff, User
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { supabase } from "../../lib/supabase";
@@ -129,6 +129,8 @@ export const EventsSection: React.FC = () => {
   const [userCredits, setUserCredits] = useState<any[]>([]);
   const [usePackagePass, setUsePackagePass] = useState(false);
   const [creditsLoading, setCreditsLoading] = useState(false);
+
+  const [viewingEvent, setViewingEvent] = useState<any | null>(null);
 
   // Login & prompt flow for event registration modal
   const [memberPromptState, setMemberPromptState] = useState<"prompt" | "login" | "guest_form">("prompt");
@@ -445,6 +447,7 @@ export const EventsSection: React.FC = () => {
             {featured && (
               <motion.article
                 custom={0} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
+                onClick={() => setViewingEvent(featured)}
                 className="bezel-outer shadow-diffuse cursor-pointer group"
               >
                 <div className="bezel-inner flex flex-col h-full">
@@ -469,7 +472,13 @@ export const EventsSection: React.FC = () => {
                       <span className="flex items-center gap-2 col-span-2"><MapPin size={13} className="text-green-600" />{featured.venue}</span>
                     </div>
                     <div className="mt-auto">
-                      <button onClick={() => handleRegisterClick(featured)} className="btn-premium bg-green-700 hover:bg-green-600 text-white w-full justify-center shadow-diffuse hover:-translate-y-0.5 cursor-pointer">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRegisterClick(featured);
+                        }}
+                        className="btn-premium bg-green-700 hover:bg-green-600 text-white w-full justify-center shadow-diffuse hover:-translate-y-0.5 cursor-pointer"
+                      >
                         Register Now
                         <span className="btn-icon-wrap !bg-white/15"><ArrowUpRight size={13} /></span>
                       </button>
@@ -485,7 +494,7 @@ export const EventsSection: React.FC = () => {
                 <motion.article
                   key={evt.id}
                   custom={i + 1} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                  onClick={() => handleRegisterClick(evt)}
+                  onClick={() => setViewingEvent(evt)}
                   className="spotlight-card flex gap-4 p-5 cursor-pointer group flex-1"
                 >
                   <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0">
@@ -518,6 +527,123 @@ export const EventsSection: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* EVENT DETAILS MODAL */}
+      <AnimatePresence>
+        {viewingEvent && (
+          <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              className="w-full max-w-2xl bg-white rounded-3xl border border-gray-100 p-6 md:p-8 shadow-2xl overflow-y-auto max-h-[90vh] text-left relative"
+            >
+              <button
+                onClick={() => setViewingEvent(null)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 cursor-pointer z-10"
+                aria-label="Close modal"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <span className={`text-xs font-heading font-semibold px-2.5 py-0.5 rounded-full ${viewingEvent.tag_color || "bg-green-50 text-green-700 border border-green-100"}`}>
+                  {viewingEvent.tag}
+                </span>
+                {viewingEvent.is_featured && (
+                  <span className="text-[10px] bg-amber-500/10 text-amber-700 border border-amber-500/20 px-2.5 py-0.5 rounded-full font-bold uppercase">
+                    Featured
+                  </span>
+                )}
+                <span className="text-xs text-gray-400 font-semibold">
+                  {viewingEvent.price === 0 && (viewingEvent.non_member_price === 0 || !viewingEvent.non_member_price)
+                    ? "Free Entry"
+                    : `Members: ${viewingEvent.price === 0 ? "Free" : `₱${viewingEvent.price.toLocaleString()}`} / Guests: ₱${(viewingEvent.non_member_price || 0).toLocaleString()}`
+                  }
+                </span>
+              </div>
+
+              <h3 className="text-2xl font-heading font-black text-gray-900 mb-4 leading-tight">{viewingEvent.title}</h3>
+
+              {viewingEvent.image_url && (
+                <div className="relative rounded-2xl overflow-hidden mb-6 bg-slate-900/5 dark:bg-slate-900/10 flex items-center justify-center min-h-[240px] max-h-[480px]">
+                  <img
+                    src={viewingEvent.image_url}
+                    alt={viewingEvent.title}
+                    className="max-h-[480px] w-auto object-contain mx-auto transition-all duration-300"
+                  />
+                </div>
+              )}
+
+              {/* Key Event Details Grid */}
+              <div className="grid sm:grid-cols-2 gap-4 p-4.5 rounded-2xl bg-gray-50/70 border border-gray-150 text-xs font-semibold text-gray-600 mb-6">
+                <div className="flex items-center gap-2.5">
+                  <CalendarDays size={16} className="text-green-700 flex-shrink-0" />
+                  <div>
+                    <span className="text-[10px] text-gray-400 block uppercase font-bold">Date</span>
+                    <span className="text-gray-900 font-bold">{new Date(viewingEvent.date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Clock size={16} className="text-green-700 flex-shrink-0" />
+                  <div>
+                    <span className="text-[10px] text-gray-400 block uppercase font-bold">Time</span>
+                    <span className="text-gray-900 font-bold">{viewingEvent.time}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 sm:col-span-2">
+                  <MapPin size={16} className="text-green-700 flex-shrink-0" />
+                  <div>
+                    <span className="text-[10px] text-gray-400 block uppercase font-bold">Venue</span>
+                    <span className="text-gray-900 font-bold">{viewingEvent.venue}</span>
+                  </div>
+                </div>
+                {viewingEvent.speaker && (
+                  <div className="flex items-center gap-2.5 sm:col-span-2 border-t border-gray-200/60 pt-2.5 mt-1">
+                    <User size={16} className="text-green-700 flex-shrink-0" />
+                    <div>
+                      <span className="text-[10px] text-gray-400 block uppercase font-bold">Keynote Speaker</span>
+                      <span className="text-gray-900 font-bold">{viewingEvent.speaker}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              {viewingEvent.description && (
+                <div className="mb-8">
+                  <h4 className="font-heading font-black text-xs text-gray-900 uppercase tracking-wider mb-2">Event Description</h4>
+                  <p className="text-gray-500 text-sm leading-relaxed whitespace-pre-line font-sans">
+                    {viewingEvent.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewingEvent(null);
+                    handleRegisterClick(viewingEvent);
+                  }}
+                  className="flex-1 btn-premium bg-green-700 hover:bg-green-600 text-white justify-center text-xs font-bold py-3"
+                >
+                  Register for Event
+                  <span className="btn-icon-wrap !bg-white/15"><ArrowUpRight size={13} /></span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingEvent(null)}
+                  className="px-6 py-3 border border-gray-200 hover:bg-gray-55/45 rounded-full text-gray-600 text-xs font-bold transition-all text-center cursor-pointer hover:bg-gray-50"
+                >
+                  Close Details
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* EVENT REGISTRATION MODAL */}
       <AnimatePresence>
