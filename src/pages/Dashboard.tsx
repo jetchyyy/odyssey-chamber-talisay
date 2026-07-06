@@ -64,6 +64,7 @@ const Dashboard: React.FC = () => {
   const [dirOtherCatText, setDirOtherCatText] = useState("");
   const [dirAddress, setDirAddress] = useState("");
   const [approvalStatus, setApprovalStatus] = useState<"approved" | "pending_approval">("approved");
+  const [dirIsVerified, setDirIsVerified] = useState(true);
   const [dirLogoUrl, setDirLogoUrl] = useState("");
   const [dirLogoFile, setDirLogoFile] = useState<File | null>(null);
   const [dirLogoPreview, setDirLogoPreview] = useState("");
@@ -73,6 +74,8 @@ const Dashboard: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [registeredEvents, setRegisteredEvents] = useState<RegisteredEvent[]>([]);
   const [activeTab, setActiveTab] = useState<"card" | "events" | "directory" | "news" | "stories" | "settings">("card");
+  const [dbPackages, setDbPackages] = useState<any[]>([]);
+  const [myCredits, setMyCredits] = useState<any[]>([]);
 
   // ── Password change states ───────────────────────────────────────────────
   const [oldPassword, setOldPassword] = useState("");
@@ -275,6 +278,35 @@ const Dashboard: React.FC = () => {
       const { data: plansData } = await supabase.from("membership_pricing").select("*").eq("is_active", true);
       if (plansData) setPlans(plansData);
 
+      // 1b. Packages
+      const { data: packagesData } = await supabase.from("membership_packages").select("*").eq("is_active", true);
+      const mappedPackages = packagesData
+        ? packagesData.map((pkg) => ({
+            id: pkg.id,
+            type: pkg.membership_type === "individual" ? "package_a" : pkg.membership_type === "sme" ? "package_b" : "package_c",
+            name: pkg.name,
+            price: Number(pkg.price),
+            period: "yr",
+            description: pkg.description,
+            isPackage: true,
+            membership_type: pkg.membership_type,
+            benefits: [
+              `${pkg.membership_type === "individual" ? "Small (Individual)" : pkg.membership_type === "sme" ? "Medium (SME)" : "Large (Corporate)"} Membership`,
+              `${pkg.included_passes} passes included (${pkg.benefit_type.replace(/_/g, " ")})`,
+              pkg.terms_and_conditions ? `Terms: ${pkg.terms_and_conditions}` : ""
+            ].filter(Boolean)
+          }))
+        : [];
+      setDbPackages(mappedPackages);
+
+      // Pre-select package from URL parameter if present
+      const params = new URLSearchParams(window.location.search);
+      const preselectedPkgId = params.get("package");
+      if (preselectedPkgId && mappedPackages.length > 0) {
+        const found = mappedPackages.find(p => p.id === preselectedPkgId);
+        if (found) setSelectedPlan(found);
+      }
+
       // 2. QR payment methods
       const { data: qrData } = await supabase.from("qr_settings").select("*").eq("is_active", true);
       if (qrData) {
@@ -300,9 +332,17 @@ const Dashboard: React.FC = () => {
         .limit(1);
       const dirData = dirDataList && dirDataList.length > 0 ? dirDataList[0] : null;
 
+      // 4b. Member package credits
+      const { data: creditsData } = await supabase
+        .from("member_package_credits")
+        .select("*")
+        .eq("user_id", user.id);
+      if (creditsData) setMyCredits(creditsData);
+
       if (dirData) {
         setHasListing(true);
         setListingId(dirData.id);
+        setDirIsVerified(dirData.is_verified);
         const isPending = dirData.approval_status === "pending_approval" && dirData.pending_changes;
         const displayData = isPending ? dirData.pending_changes : dirData;
         setDirName(displayData.business_name || "");
@@ -401,22 +441,30 @@ const Dashboard: React.FC = () => {
 
       let mappedMembershipType = selectedPlan.type;
       let packageAvailed = null;
+      let membershipPackageId = null;
 
-      if (selectedPlan.id === "package_a") {
-        mappedMembershipType = "individual";
-        packageAvailed = "package_a";
-      } else if (selectedPlan.id === "package_b") {
-        mappedMembershipType = "sme";
-        packageAvailed = "package_b";
-      } else if (selectedPlan.id === "package_c") {
-        mappedMembershipType = "corporate";
-        packageAvailed = "package_c";
+      if ((selectedPlan as any).isPackage) {
+        mappedMembershipType = (selectedPlan as any).membership_type;
+        packageAvailed = (selectedPlan as any).membership_type === "individual" ? "package_a" : (selectedPlan as any).membership_type === "sme" ? "package_b" : "package_c";
+        membershipPackageId = selectedPlan.id;
+      } else {
+        if (selectedPlan.id === "package_a") {
+          mappedMembershipType = "individual";
+          packageAvailed = "package_a";
+        } else if (selectedPlan.id === "package_b") {
+          mappedMembershipType = "sme";
+          packageAvailed = "package_b";
+        } else if (selectedPlan.id === "package_c") {
+          mappedMembershipType = "corporate";
+          packageAvailed = "package_c";
+        }
       }
 
       const { error: appError } = await supabase.from("membership_applications").insert({
         user_id: user.id, 
         membership_type: mappedMembershipType, 
         package_availed: packageAvailed,
+        membership_package_id: membershipPackageId,
         company_name: companyName,
         business_category: finalCategory, 
         phone, 
@@ -742,6 +790,7 @@ const Dashboard: React.FC = () => {
       {profile?.membership_status === "none" && (
         <ApplicationTab
           plans={plans} selectedPlan={selectedPlan} onSelectPlan={handleSelectPlan}
+          packages={dbPackages}
           paymentMethods={paymentMethods} selectedPayment={selectedPayment} onSelectPayment={handleSelectPayment}
           formError={formError} actionLoading={actionLoading} onSubmit={handleSubmitApplication}
           companyName={companyName} setCompanyName={setCompanyName}
@@ -882,7 +931,7 @@ const Dashboard: React.FC = () => {
             {/* Tab panels */}
             <div className="space-y-6">
               <AnimatePresence mode="wait">
-                {activeTab === "card" && <MemberCardTab key="card" profile={profile} />}
+                {activeTab === "card" && <MemberCardTab key="card" profile={profile} credits={myCredits} />}
 
                 {activeTab === "events" && (
                   <EventsTab key="events" registeredEvents={registeredEvents} onDownloadPass={handleDownloadPass} />
@@ -892,6 +941,7 @@ const Dashboard: React.FC = () => {
                   <DirectoryTab
                     key="directory"
                     hasListing={hasListing} approvalStatus={approvalStatus}
+                    isVerified={dirIsVerified}
                     formError={formError} actionLoading={actionLoading} onSubmit={handleSaveDirectoryListing}
                     dirName={dirName} setDirName={setDirName}
                     dirDesc={dirDesc} setDirDesc={setDirDesc}

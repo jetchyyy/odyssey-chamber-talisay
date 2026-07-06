@@ -380,7 +380,7 @@ export const MembersTab: React.FC = () => {
               contact_phone: newMemberPhone.trim() || null,
               category: "Retail",
               address: "Talisay City",
-              is_verified: true,
+              is_verified: false,
               is_featured: false,
               approval_status: "approved",
               pending_changes: null
@@ -430,6 +430,26 @@ export const MembersTab: React.FC = () => {
       console.error("Error loading member credits:", err);
     } finally {
       setCreditsLoading(false);
+    }
+  };
+
+  const handleToggleCreditActive = async (creditId: string, currentStatus: boolean, memberId: string) => {
+    try {
+      const { error } = await supabase
+        .from("member_package_credits")
+        .update({ is_active: !currentStatus, updated_at: new Date().toISOString() })
+        .eq("id", creditId);
+      if (error) throw error;
+      toast.success(currentStatus ? "Pass disabled." : "Pass enabled.");
+      
+      // Refetch credits
+      const { data } = await supabase
+        .from("member_package_credits")
+        .select("*")
+        .eq("user_id", memberId);
+      if (data) setMemberCredits(data);
+    } catch (err: any) {
+      toast.error("Failed to update credit status: " + err.message);
     }
   };
 
@@ -1009,15 +1029,33 @@ export const MembersTab: React.FC = () => {
                   ) : memberCredits.length > 0 ? (
                     <div className="space-y-2">
                       {memberCredits.map((credit) => (
-                        <div key={credit.id} className="p-3 bg-white/[0.02] border border-white/5 rounded-xl flex items-center justify-between">
-                          <div>
+                        <div key={credit.id} className={`p-3 border rounded-xl flex items-center justify-between ${
+                          credit.is_active !== false ? "bg-white/[0.02] border-white/5" : "bg-red-950/10 border-red-500/10 opacity-70"
+                        }`}>
+                          <div className="space-y-1">
                             <p className="text-white text-[11px] font-bold">{credit.package_name}</p>
-                            <p className="text-[10px] text-gray-400 capitalize">Benefit: {credit.benefit_type.replace("_", " ")}</p>
+                            <p className="text-[10px] text-[#8A9690] capitalize">Benefit: {credit.benefit_type.replace("_", " ")}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${
+                                credit.is_active !== false
+                                  ? "text-green-400 bg-green-500/10 border-green-500/25"
+                                  : "text-red-400 bg-red-500/10 border-red-500/25"
+                              }`}>
+                                {credit.is_active !== false ? "Active" : "Disabled"}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-right">
+                          <div className="text-right flex flex-col items-end gap-2">
                             <span className="text-xs font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                               {credit.remaining_credits} / {credit.total_credits} Remaining
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleCreditActive(credit.id, credit.is_active !== false, editingMember.id)}
+                              className="px-2 py-1 bg-white/5 hover:bg-white/10 text-white rounded text-[10px] font-bold cursor-pointer transition-colors border border-white/10"
+                            >
+                              {credit.is_active !== false ? "Disable passes" : "Enable passes"}
+                            </button>
                           </div>
                         </div>
                       ))}

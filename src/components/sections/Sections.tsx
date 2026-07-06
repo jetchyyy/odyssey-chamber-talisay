@@ -305,23 +305,33 @@ const packagePlans = [
 
 export const MembershipSection: React.FC = () => {
   const [dbPlans, setDbPlans] = React.useState<any[]>([]);
+  const [dbPackages, setDbPackages] = React.useState<any[]>([]);
 
   React.useEffect(() => {
-    const fetchPlans = async () => {
+    const fetchData = async () => {
       try {
-        const { data, error } = await supabase
+        const { data: plansData } = await supabase
           .from("membership_pricing")
           .select("*")
           .eq("is_active", true)
           .order("price", { ascending: true });
-        if (data && data.length > 0) {
-          setDbPlans(data);
+        if (plansData) {
+          setDbPlans(plansData);
+        }
+
+        const { data: packagesData } = await supabase
+          .from("membership_packages")
+          .select("*")
+          .eq("is_active", true)
+          .order("price", { ascending: true });
+        if (packagesData) {
+          setDbPackages(packagesData);
         }
       } catch (err) {
-        console.error("Error fetching pricing from Supabase:", err);
+        console.error("Error fetching data from Supabase:", err);
       }
     };
-    fetchPlans();
+    fetchData();
   }, []);
 
   const displayPlans = dbPlans.length > 0 
@@ -335,6 +345,19 @@ export const MembershipSection: React.FC = () => {
         badge: p.type === "sme" ? "Most Popular" : undefined
       })) 
     : plans;
+
+  const displayPackages = dbPackages.map(pkg => ({
+    id: pkg.id,
+    name: pkg.name,
+    price: `PHP ${Number(pkg.price).toLocaleString()}`,
+    period: "/yr",
+    desc: pkg.description,
+    features: [
+      `${pkg.membership_type === "individual" ? "Small (Individual)" : pkg.membership_type === "sme" ? "Medium (SME)" : "Large (Corporate)"} Membership`,
+      `${pkg.included_passes} passes included (${pkg.benefit_type.replace(/_/g, " ")})`
+    ],
+    terms: pkg.terms_and_conditions
+  }));
 
   return (
     <section className="py-32 section-shell" aria-label="Membership plans">
@@ -418,69 +441,81 @@ export const MembershipSection: React.FC = () => {
         </div>
 
         {/* Special Package Deals Section */}
-        <div className="text-center max-w-xl mx-auto mt-24 mb-12">
-          <motion.h3 custom={0} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
-            className="text-2xl font-heading font-black text-[#0D1A14] mb-3">
-            Special Membership Package Deals
-          </motion.h3>
-          <motion.p custom={1} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
-            className="text-gray-500 leading-relaxed">
-            Get more value by bundling your annual chamber membership with premium event access passes.
-          </motion.p>
-        </div>
+        {displayPackages.length > 0 && (
+          <>
+            <div className="text-center max-w-xl mx-auto mt-24 mb-12">
+              <motion.h3 custom={0} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
+                className="text-2xl font-heading font-black text-[#0D1A14] mb-3">
+                Special Membership Package Deals
+              </motion.h3>
+              <motion.p custom={1} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
+                className="text-gray-500 leading-relaxed">
+                Get more value by bundling your annual chamber membership with premium event access passes.
+              </motion.p>
+            </div>
 
-        <div className="grid md:grid-cols-3 gap-5 items-stretch">
-          {packagePlans.map(({ name, price, period, desc, features }, i) => (
-            <motion.div
-              key={name}
-              custom={i} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
-              className="relative rounded-[2rem] p-8 flex flex-col spring-fast bg-white spotlight-card border border-gray-100"
-            >
-              <div className="absolute top-0 right-0 bg-green-700 text-white text-[8px] font-heading font-bold uppercase tracking-widest px-3 py-1 rounded-bl-2xl">
-                Package Deal
-              </div>
-
-              {/* Plan name */}
-              <div className="text-[10px] font-heading font-bold uppercase tracking-[0.2em] mb-3 text-gray-400">
-                {name}
-              </div>
-
-              {/* Price */}
-              <div className="flex items-end gap-1.5 mb-2 h-12">
-                <span className="text-[2.25rem] font-heading font-black leading-none text-[#0D1A14]">
-                  {price}
-                </span>
-                <span className="text-sm mb-1 text-gray-400">{period}</span>
-              </div>
-
-              {/* Desc */}
-              <p className="text-sm mb-6 leading-relaxed min-h-[3rem] text-gray-400">{desc}</p>
-
-              {/* Features */}
-              <ul className="space-y-2.5 flex-1 mb-8">
-                {features.map((f: string) => (
-                  <li key={f} className="flex items-start gap-2.5 text-sm">
-                    <CheckCircle2 size={14} className="mt-0.5 flex-shrink-0 text-green-600" />
-                    <span className="text-gray-600">{f}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {/* CTA */}
-              <div className="mt-auto">
-                <a
-                  href="/register"
-                  className="btn-premium justify-center w-full spring-fast bg-[#0D1A14] text-white hover:bg-navy-mid shadow-navy-diffuse"
+            <div className="grid md:grid-cols-3 gap-5 items-stretch">
+              {displayPackages.map((pkg, i) => (
+                <motion.div
+                  key={pkg.id}
+                  custom={i} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
+                  className="relative rounded-[2rem] p-8 flex flex-col spring-fast bg-white spotlight-card border border-gray-100"
                 >
-                  Select Package
-                  <span className="btn-icon-wrap !bg-white/10">
-                    <ArrowUpRight size={13} />
-                  </span>
-                </a>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+                  <div className="absolute top-0 right-0 bg-green-700 text-white text-[8px] font-heading font-bold uppercase tracking-widest px-3 py-1 rounded-bl-2xl">
+                    Package Deal
+                  </div>
+
+                  {/* Plan name */}
+                  <div className="text-[10px] font-heading font-bold uppercase tracking-[0.2em] mb-3 text-gray-400">
+                    {pkg.name}
+                  </div>
+
+                  {/* Price */}
+                  <div className="flex items-end gap-1.5 mb-2 h-12">
+                    <span className="text-[2.25rem] font-heading font-black leading-none text-[#0D1A14]">
+                      {pkg.price}
+                    </span>
+                    <span className="text-sm mb-1 text-gray-400">{pkg.period}</span>
+                  </div>
+
+                  {/* Desc */}
+                  <p className="text-sm mb-6 leading-relaxed min-h-[3rem] text-gray-400">{pkg.desc}</p>
+
+                  {/* Features */}
+                  <ul className="space-y-2.5 flex-1 mb-6">
+                    {pkg.features.map((f: string) => (
+                      <li key={f} className="flex items-start gap-2.5 text-sm">
+                        <CheckCircle2 size={14} className="mt-0.5 flex-shrink-0 text-green-600" />
+                        <span className="text-gray-600">{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* Terms & Conditions */}
+                  {pkg.terms && (
+                    <div className="text-[10px] text-gray-400 leading-normal italic border-t border-gray-100 pt-3.5 mb-6">
+                      <span className="font-bold uppercase tracking-wider text-[8px] text-gray-500 block mb-0.5">Terms & Conditions</span>
+                      {pkg.terms}
+                    </div>
+                  )}
+
+                  {/* CTA */}
+                  <div className="mt-auto">
+                    <a
+                      href={`/register?package=${pkg.id}`}
+                      className="btn-premium justify-center w-full spring-fast bg-[#0D1A14] text-white hover:bg-navy-mid shadow-navy-diffuse"
+                    >
+                      Select Package
+                      <span className="btn-icon-wrap !bg-white/10">
+                        <ArrowUpRight size={13} />
+                      </span>
+                    </a>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </section>
   );

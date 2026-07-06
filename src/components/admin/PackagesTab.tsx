@@ -16,6 +16,7 @@ interface PackageRow {
   included_passes: number;
   benefit_type: string;
   is_active: boolean;
+  terms_and_conditions: string;
   created_at: string;
 }
 
@@ -51,6 +52,7 @@ export const PackagesTab: React.FC = () => {
   const [fIncludedPasses, setFIncludedPasses] = useState<number | "">(4);
   const [fBenefitType, setFBenefitType] = useState("coffee_connections");
   const [fIsActive, setFIsActive] = useState(true);
+  const [fTermsAndConditions, setFTermsAndConditions] = useState("");
 
   const loadData = async () => {
     setLoading(true);
@@ -80,6 +82,7 @@ export const PackagesTab: React.FC = () => {
     setFIncludedPasses(4);
     setFBenefitType("coffee_connections");
     setFIsActive(true);
+    setFTermsAndConditions("");
     setEditingPkg(null);
   };
 
@@ -97,6 +100,7 @@ export const PackagesTab: React.FC = () => {
     setFIncludedPasses(pkg.included_passes);
     setFBenefitType(pkg.benefit_type);
     setFIsActive(pkg.is_active);
+    setFTermsAndConditions(pkg.terms_and_conditions || "");
     setShowModal(true);
   };
 
@@ -116,6 +120,7 @@ export const PackagesTab: React.FC = () => {
         included_passes: Number(fIncludedPasses),
         benefit_type: fBenefitType.trim() || "coffee_connections",
         is_active: fIsActive,
+        terms_and_conditions: fTermsAndConditions.trim(),
         updated_at: new Date().toISOString(),
       };
 
@@ -249,6 +254,14 @@ export const PackagesTab: React.FC = () => {
                 <p className="text-[11px] text-[#8A9690] leading-relaxed line-clamp-2">{pkg.description}</p>
               )}
 
+              {/* Terms and conditions */}
+              {pkg.terms_and_conditions && (
+                <p className="text-[10px] text-[#8A9690] leading-relaxed italic border-t border-white/[0.04] pt-2">
+                  <span className="font-bold uppercase tracking-wider text-[8px] text-[#55635B] block mb-0.5">Terms & Conditions</span>
+                  {pkg.terms_and_conditions}
+                </p>
+              )}
+
               {/* Key stats */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-white/[0.03] rounded-xl p-3">
@@ -349,6 +362,18 @@ export const PackagesTab: React.FC = () => {
                     placeholder="Brief description shown on the membership page..."
                     value={fDescription}
                     onChange={(e) => setFDescription(e.target.value)}
+                    className={`${inputCls} resize-none`}
+                  />
+                </div>
+
+                {/* Terms and Conditions */}
+                <div>
+                  <label className={labelCls}>Terms & Conditions</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Specific terms for this package deal..."
+                    value={fTermsAndConditions}
+                    onChange={(e) => setFTermsAndConditions(e.target.value)}
                     className={`${inputCls} resize-none`}
                   />
                 </div>

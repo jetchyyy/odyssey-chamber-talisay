@@ -4,7 +4,7 @@ import type { Variants } from "framer-motion";
 import { 
   CalendarDays, MapPin, Clock, ArrowRight, Newspaper, 
   ArrowUpRight, Loader2, CheckCircle2, QrCode, CreditCard, X,
-  Camera, Upload, ChevronLeft, ChevronRight, Tag
+  Camera, Upload, ChevronLeft, ChevronRight, Tag, Eye, EyeOff
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { supabase } from "../../lib/supabase";
@@ -130,6 +130,14 @@ export const EventsSection: React.FC = () => {
   const [usePackagePass, setUsePackagePass] = useState(false);
   const [creditsLoading, setCreditsLoading] = useState(false);
 
+  // Login & prompt flow for event registration modal
+  const [memberPromptState, setMemberPromptState] = useState<"prompt" | "login" | "guest_form">("prompt");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
   const isMember = user && profile?.membership_status === "active";
   const originalPrice = selectedEvent ? (isMember ? selectedEvent.price : (selectedEvent.non_member_price || 0)) : 0;
 
@@ -217,6 +225,12 @@ export const EventsSection: React.FC = () => {
                 setRegError(null);
                 setPaymentReference("");
                 setRegQrCodePass("");
+                setMemberPromptState("prompt");
+                setLoginEmail("");
+                setLoginPassword("");
+                setLoginError(null);
+                setLoginLoading(false);
+                setShowLoginPassword(false);
               }
             }
           }
@@ -257,6 +271,7 @@ export const EventsSection: React.FC = () => {
           .select("*")
           .eq("user_id", user.id)
           .eq("benefit_type", "coffee_connections")
+          .eq("is_active", true)
           .gt("remaining_credits", 0)
           .limit(1);
         if (!error && data && data.length > 0) {
@@ -292,6 +307,12 @@ export const EventsSection: React.FC = () => {
     setRegQrCodePass("");
     setAppliedPromo(null);
     setPromoCode("");
+    setMemberPromptState("prompt");
+    setLoginEmail("");
+    setLoginPassword("");
+    setLoginError(null);
+    setLoginLoading(false);
+    setShowLoginPassword(false);
   };
 
   const handleCloseRegModal = () => {
@@ -306,6 +327,12 @@ export const EventsSection: React.FC = () => {
     setRegQrCodePass("");
     setAppliedPromo(null);
     setPromoCode("");
+    setMemberPromptState("prompt");
+    setLoginEmail("");
+    setLoginPassword("");
+    setLoginError(null);
+    setLoginLoading(false);
+    setShowLoginPassword(false);
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
@@ -517,70 +544,218 @@ export const EventsSection: React.FC = () => {
                 const memberPrice = selectedEvent.price;
                 const guestPrice = selectedEvent.non_member_price || 0;
                 const applicablePrice = isMember ? memberPrice : guestPrice;
-                return regSuccess ? (
-                  <div className="text-center py-6 flex flex-col items-center">
-                    <div className="w-14 h-14 bg-green-50 border border-green-200 text-green-700 rounded-full flex items-center justify-center mx-auto mb-4 font-bold">
-                      <CheckCircle2 size={28} />
-                    </div>
-                    <h4 className="font-heading font-black text-gray-900 text-base mb-2">Registration Submitted!</h4>
-                    <p className="text-xs text-gray-500 leading-relaxed mb-6 max-w-sm">
-                      {finalPrice > 0 
-                        ? "Your payment reference is submitted for verification. Please save/download your QR Check-In Pass below to present at the venue."
-                        : "Your free check-in pass has been generated! Save it below and present it at the venue entrance."}
-                    </p>
-                    
-                    {/* Generated QR Pass Preview */}
-                    <div className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm inline-block mb-6 text-center">
-                      <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(regQrCodePass)}`} 
-                        alt="Ticket Pass QR" 
-                        className="w-36 h-36 object-contain mx-auto"
-                      />
-                      <div className="text-[10px] font-mono text-gray-400 mt-2 font-bold uppercase">{regQrCodePass}</div>
-                    </div>
 
-                    <div className="flex flex-col sm:flex-row gap-2 w-full">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(regQrCodePass)}`;
-                            const response = await fetch(qrUrl);
-                            const blob = await response.blob();
-                            const fileUrl = window.URL.createObjectURL(blob);
-                            
-                            const link = document.createElement("a");
-                            link.href = fileUrl;
-                            link.download = `chamber_pass_${selectedEvent.title.toLowerCase().replace(/[^a-z0-9]+/g, "_")}.png`;
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            window.URL.revokeObjectURL(fileUrl);
-                            toast.success("Check-In Pass downloaded!");
-                          } catch (e: any) {
-                            toast.error("Download failed: " + e.message);
-                          }
-                        }}
-                        className="flex-1 btn-premium bg-green-700 hover:bg-green-600 text-white justify-center text-xs"
-                      >
-                        Download QR Pass
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedEvent(null);
-                          if (user) {
-                            navigate("/dashboard");
-                          }
-                        }}
-                        className="flex-1 btn-premium bg-[#0D1A14] text-white justify-center text-xs"
-                      >
-                        {user ? "Go to Dashboard" : "Close"}
-                      </button>
+                if (regSuccess) {
+                  return (
+                    <div className="text-center py-6 flex flex-col items-center">
+                      <div className="w-14 h-14 bg-green-50 border border-green-200 text-green-700 rounded-full flex items-center justify-center mx-auto mb-4 font-bold">
+                        <CheckCircle2 size={28} />
+                      </div>
+                      <h4 className="font-heading font-black text-gray-900 text-base mb-2">Registration Submitted!</h4>
+                      <p className="text-xs text-gray-500 leading-relaxed mb-6 max-w-sm">
+                        {finalPrice > 0 
+                          ? "Your payment reference is submitted for verification. Please save/download your QR Check-In Pass below to present at the venue."
+                          : "Your free check-in pass has been generated! Save it below and present it at the venue entrance."}
+                      </p>
+                      
+                      {/* Generated QR Pass Preview */}
+                      <div className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm inline-block mb-6 text-center">
+                        <img 
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(regQrCodePass)}`} 
+                          alt="Ticket Pass QR" 
+                          className="w-36 h-36 object-contain mx-auto"
+                        />
+                        <div className="text-[10px] font-mono text-gray-400 mt-2 font-bold uppercase">{regQrCodePass}</div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2 w-full">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(regQrCodePass)}`;
+                              const response = await fetch(qrUrl);
+                              const blob = await response.blob();
+                              const fileUrl = window.URL.createObjectURL(blob);
+                              
+                              const link = document.createElement("a");
+                              link.href = fileUrl;
+                              link.download = `chamber_pass_${selectedEvent.title.toLowerCase().replace(/[^a-z0-9]+/g, "_")}.png`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                              window.URL.revokeObjectURL(fileUrl);
+                              toast.success("Check-In Pass downloaded!");
+                            } catch (e: any) {
+                              toast.error("Download failed: " + e.message);
+                            }
+                          }}
+                          className="flex-1 btn-premium bg-green-700 hover:bg-green-600 text-white justify-center text-xs"
+                        >
+                          Download QR Pass
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEvent(null);
+                            if (user) {
+                              navigate("/dashboard");
+                            }
+                          }}
+                          className="flex-1 btn-premium bg-[#0D1A14] text-white justify-center text-xs"
+                        >
+                          {user ? "Go to Dashboard" : "Close"}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
+                  );
+                }
+
+                if (!user && memberPromptState === "prompt") {
+                  return (
+                    <div className="space-y-6 py-4">
+                      <div className="text-center space-y-3">
+                        <div className="w-16 h-16 bg-gold/10 text-amber-700 rounded-full flex items-center justify-center mx-auto mb-4 border border-gold/20">
+                          <CalendarDays size={32} />
+                        </div>
+                        <h4 className="font-heading font-black text-gray-900 text-lg">Are you a registered Chamber member?</h4>
+                        <p className="text-xs text-gray-500 leading-relaxed max-w-sm mx-auto">
+                          Active members of the Talisay Chamber of Commerce receive special discounted admission rates, package credit redemptions, and automated event tracking.
+                        </p>
+                      </div>
+                      
+                      <div className="flex flex-col gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setMemberPromptState("login")}
+                          className="w-full btn-premium bg-green-700 hover:bg-green-600 text-white justify-center shadow-diffuse text-xs font-bold py-3.5"
+                        >
+                          Yes, I am a member (Log In)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMemberPromptState("guest_form")}
+                          className="w-full py-3 border border-gray-200 hover:border-gray-300 rounded-xl text-gray-600 text-xs font-bold transition-all text-center cursor-pointer hover:bg-gray-50/50"
+                        >
+                          No, continue as Guest
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (!user && memberPromptState === "login") {
+                  return (
+                    <div className="space-y-5 py-2">
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-2">
+                        <h4 className="font-heading font-black text-gray-900 text-base">Sign In to Member Portal</h4>
+                        <button
+                          type="button"
+                          onClick={() => setMemberPromptState("prompt")}
+                          className="text-[11px] text-green-700 font-bold hover:underline"
+                        >
+                          Back
+                        </button>
+                      </div>
+
+                      {loginError && (
+                        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-semibold">
+                          {loginError}
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-heading font-bold text-gray-500 uppercase mb-1">Email Address</label>
+                          <input
+                            type="email"
+                            placeholder="you@company.com"
+                            value={loginEmail}
+                            onChange={(e) => setLoginEmail(e.target.value)}
+                            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:bg-white focus:border-green-500 outline-none transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-heading font-bold text-gray-500 uppercase mb-1">Password</label>
+                          <div className="relative">
+                            <input
+                              type={showLoginPassword ? "text" : "password"}
+                              placeholder="••••••••"
+                              value={loginPassword}
+                              onChange={(e) => setLoginPassword(e.target.value)}
+                              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:bg-white focus:border-green-500 outline-none transition-all"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowLoginPassword(!showLoginPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                            >
+                              {showLoginPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={loginLoading}
+                          onClick={async () => {
+                            if (!loginEmail || !loginPassword) {
+                              setLoginError("Please enter both email and password.");
+                              return;
+                            }
+                            setLoginLoading(true);
+                            setLoginError(null);
+                            try {
+                              const { error: signInError } = await supabase.auth.signInWithPassword({
+                                email: loginEmail,
+                                password: loginPassword,
+                              });
+                              if (signInError) throw signInError;
+                            } catch (err: any) {
+                              setLoginError(err.message || "Failed to sign in.");
+                            } finally {
+                              setLoginLoading(false);
+                            }
+                          }}
+                          className="w-full btn-premium bg-[#0D1A14] text-white justify-center shadow-navy-diffuse text-xs font-bold py-3"
+                        >
+                          {loginLoading ? (
+                            <span className="flex items-center gap-1.5"><Loader2 size={13} className="animate-spin" /> Signing In...</span>
+                          ) : (
+                            "Sign In"
+                          )}
+                        </button>
+
+                        <div className="text-center pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setMemberPromptState("guest_form")}
+                            className="text-xs text-gray-500 hover:text-gray-700 font-semibold"
+                          >
+                            Or continue registering as Guest
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
                   <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                    {!user && (
+                      <div className="p-3 bg-green-50 border border-green-200 text-[11px] text-green-800 rounded-xl font-semibold flex items-center justify-between">
+                        <span>Registering as a Guest.</span>
+                        <button
+                          type="button"
+                          onClick={() => setMemberPromptState("login")}
+                          className="text-green-700 font-bold hover:underline"
+                        >
+                          Are you a member? Sign In
+                        </button>
+                      </div>
+                    )}
+
                     {regError && (
                       <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-semibold">
                         {regError}

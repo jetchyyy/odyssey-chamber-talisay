@@ -45,7 +45,9 @@ const Login: React.FC = () => {
         if (profile?.role === "admin") {
           navigate("/admin");
         } else {
-          navigate("/dashboard");
+          const params = new URLSearchParams(window.location.search);
+          const pkgParam = params.get("package");
+          navigate(pkgParam ? `/dashboard?package=${pkgParam}` : "/dashboard");
         }
       }
 

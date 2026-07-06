@@ -82,7 +82,7 @@ const BoardOfDirectors: React.FC = () => {
       <div className="absolute bottom-12 -left-20 w-[400px] h-[400px] bg-emerald-50/40 rounded-full blur-3xl pointer-events-none -z-10" />
 
       <div className="container mx-auto px-4 md:px-10 max-w-7xl relative z-10">
-        
+
         {/* Header section */}
         <div className="text-center max-w-3xl mx-auto mb-20">
           <motion.div
@@ -99,7 +99,7 @@ const BoardOfDirectors: React.FC = () => {
             transition={{ duration: 0.8, ease: [0.32, 0.72, 0, 1] }}
             className="text-[clamp(2.25rem,5vw,3.75rem)] font-heading font-black text-[#0D1A14] leading-none tracking-tight mb-6"
           >
-            Board of Directors
+            Board of Trustees
           </motion.h1>
           <motion.p
             initial={{ opacity: 0 }}
@@ -131,7 +131,7 @@ const BoardOfDirectors: React.FC = () => {
               <div>
                 <div className="flex items-center gap-4 mb-10 max-w-md mx-auto justify-center">
                   <div className="h-px flex-1 bg-gradient-to-r from-transparent to-gray-200" />
-                  <span className="text-[10px] font-heading font-extrabold text-green-700 tracking-[0.25em] uppercase">Core Executive Officers</span>
+                  <span className="text-[10px] font-heading font-extrabold text-green-700 tracking-[0.25em] uppercase">Officers</span>
                   <div className="h-px flex-1 bg-gradient-to-l from-transparent to-gray-200" />
                 </div>
 
@@ -146,11 +146,10 @@ const BoardOfDirectors: React.FC = () => {
                           setSelectedMember(member);
                         }
                       }}
-                      className={`group relative rounded-[2rem] bg-white border border-gray-100 shadow-[0_8px_30px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col justify-between p-6 transition-all duration-300 ${
-                        member.autobiography 
-                          ? "cursor-pointer hover:shadow-[0_20px_50px_rgba(22,101,52,0.08)] hover:border-green-600/10" 
-                          : ""
-                      }`}
+                      className={`group relative rounded-[2rem] bg-white border border-gray-100 shadow-[0_8px_30px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col justify-between p-6 transition-all duration-300 ${member.autobiography
+                        ? "cursor-pointer hover:shadow-[0_20px_50px_rgba(22,101,52,0.08)] hover:border-green-600/10"
+                        : ""
+                        }`}
                     >
                       {/* Decorative elements inside card */}
                       <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-green-500/10 transition-colors" />
@@ -171,7 +170,7 @@ const BoardOfDirectors: React.FC = () => {
                               </div>
                             )}
                           </div>
-                          
+
                           {/* Accent badge for President */}
                           {member.rank === 1 && (
                             <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-gold text-white p-1 rounded-full border border-white shadow-sm flex items-center justify-center">
@@ -187,7 +186,7 @@ const BoardOfDirectors: React.FC = () => {
                         <p className="text-xs font-bold text-amber-600 uppercase tracking-widest font-heading">
                           {member.position}
                         </p>
-                        
+
                         {member.autobiography && (
                           <p className="text-xs text-gray-400 mt-4 leading-relaxed line-clamp-3 font-medium max-w-[240px]">
                             {member.autobiography}
@@ -215,7 +214,7 @@ const BoardOfDirectors: React.FC = () => {
               <div>
                 <div className="flex items-center gap-4 mb-10 max-w-md mx-auto justify-center">
                   <div className="h-px flex-1 bg-gradient-to-r from-transparent to-gray-200" />
-                  <span className="text-[10px] font-heading font-extrabold text-green-700 tracking-[0.25em] uppercase">Board Directors</span>
+                  <span className="text-[10px] font-heading font-extrabold text-green-700 tracking-[0.25em] uppercase">Board Members</span>
                   <div className="h-px flex-1 bg-gradient-to-l from-transparent to-gray-200" />
                 </div>
 
@@ -230,11 +229,10 @@ const BoardOfDirectors: React.FC = () => {
                           setSelectedMember(member);
                         }
                       }}
-                      className={`group bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4 transition-all ${
-                        member.autobiography 
-                          ? "cursor-pointer hover:shadow-[0_12px_35px_rgba(22,101,52,0.04)] hover:border-green-600/5" 
-                          : "shadow-[0_4px_25px_rgba(0,0,0,0.01)]"
-                      }`}
+                      className={`group bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4 transition-all ${member.autobiography
+                        ? "cursor-pointer hover:shadow-[0_12px_35px_rgba(22,101,52,0.04)] hover:border-green-600/5"
+                        : "shadow-[0_4px_25px_rgba(0,0,0,0.01)]"
+                        }`}
                     >
                       {/* Smaller Photo Frame */}
                       <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 bg-gray-50 border border-gray-100 flex items-center justify-center relative shadow-sm">

@@ -28,6 +28,7 @@ const InstagramIcon = () => (
 interface DirectoryTabProps {
   hasListing: boolean;
   approvalStatus: "approved" | "pending_approval";
+  isVerified: boolean;
   formError: string | null;
   actionLoading: boolean;
   onSubmit: (e: React.FormEvent) => void;
@@ -48,7 +49,7 @@ interface DirectoryTabProps {
 
 const DirectoryTab: React.FC<DirectoryTabProps> = (props) => {
   const {
-    hasListing, approvalStatus, formError, actionLoading, onSubmit,
+    hasListing, approvalStatus, isVerified, formError, actionLoading, onSubmit,
     dirName, setDirName, dirDesc, setDirDesc,
     dirEmail, setDirEmail, dirPhone, setDirPhone,
     dirWeb, setDirWeb, dirFacebook, setDirFacebook,
@@ -88,6 +89,20 @@ const DirectoryTab: React.FC<DirectoryTabProps> = (props) => {
           <p className="text-sm text-gray-500 mb-6">
             Update your business information on the public Talisay Chamber Business Directory.
           </p>
+
+          {!isVerified && approvalStatus === "approved" && (
+            <div className="mb-6 p-4 bg-green-50/50 border border-green-200 text-green-900 rounded-2xl flex items-start gap-3 text-left">
+              <div className="p-1.5 bg-green-100 rounded-xl text-green-700 mt-0.5">
+                <Shield size={16} />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold font-heading text-green-800">Directory Profile Pending Submission</h4>
+                <p className="text-[11px] text-green-700/80 leading-relaxed mt-0.5">
+                  Your business listing is currently hidden from the public directory. Please review your details below, fill in your description, website, or logo, and submit for admin approval to publish it.
+                </p>
+              </div>
+            </div>
+          )}
 
           {approvalStatus === "pending_approval" && (
             <div className="mb-6 p-4 bg-amber-50/70 border border-amber-200/60 text-amber-905 rounded-2xl flex items-start gap-3 shadow-[0_2px_10px_rgba(245,158,11,0.02)] text-left">
@@ -256,7 +271,7 @@ const DirectoryTab: React.FC<DirectoryTabProps> = (props) => {
                   <Loader2 size={13} className="animate-spin" /> Saving...
                 </span>
               ) : (
-                "Save Proposed Edits"
+                isVerified ? "Save Proposed Edits" : "Submit Profile for Approval"
               )}
             </button>
           </form>

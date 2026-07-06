@@ -144,23 +144,17 @@ export const ApplicationsTab: React.FC = () => {
               contact_phone: app.phone,
               category: app.business_category || "Retail",
               address: app.business_address || "Talisay City",
-              is_verified: true,
+              is_verified: false,
               is_featured: false,
               approval_status: "approved",
               pending_changes: null
             });
           if (dirError) console.error("Error creating auto-directory listing:", dirError.message);
-        } else {
-          // Verify existing listing
-          await supabase
-            .from("business_directory")
-            .update({ is_verified: true })
-            .eq("id", existingListing.id);
         }
       }
 
       await loadData();
-      toast.success("Application approved, user activated, and directory listing verified!");
+      toast.success("Application approved and member activated!");
     } catch (err: any) {
       toast.error("Error approving application: " + err.message);
     } finally {
@@ -274,17 +268,12 @@ export const ApplicationsTab: React.FC = () => {
                 contact_phone: app.phone,
                 category: app.business_category || "Retail",
                 address: app.business_address || "Talisay City",
-                is_verified: true,
+                is_verified: false,
                 is_featured: false,
                 approval_status: "approved",
                 pending_changes: null
               });
             if (dirError) console.error("Error creating auto-directory listing:", dirError.message);
-          } else {
-            await supabase
-              .from("business_directory")
-              .update({ is_verified: true })
-              .eq("id", existingListing.id);
           }
         }
       } else if (newStatus === "rejected") {

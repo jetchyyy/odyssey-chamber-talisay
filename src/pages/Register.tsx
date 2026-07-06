@@ -1,14 +1,13 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Mail, Lock, User, Building, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 const Register: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [companyName, setCompanyName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +33,6 @@ const Register: React.FC = () => {
         options: {
           data: {
             full_name: fullName,
-            company_name: companyName.trim(),
             role: "member",
           },
         },
@@ -48,8 +46,10 @@ const Register: React.FC = () => {
 
       if (data?.user) {
         setSuccess(true);
+        const params = new URLSearchParams(window.location.search);
+        const pkgParam = params.get("package");
         setTimeout(() => {
-          navigate("/login");
+          navigate(pkgParam ? `/login?package=${pkgParam}` : "/login");
         }, 4000);
       }
     } catch (err: any) {
@@ -130,20 +130,7 @@ const Register: React.FC = () => {
                 </div>
               </div>
             </div>
-            
-            <div>
-              <label className="block text-[13px] font-heading font-semibold text-gray-700 mb-1.5 ml-1">Company / Business Name</label>
-              <div className="relative">
-                <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Talisay Trading Corp."
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:border-green-500 focus:ring-4 focus:ring-green-500/10 outline-none transition-all"
-                />
-              </div>
-            </div>
+
 
             <div>
               <label className="block text-[13px] font-heading font-semibold text-gray-700 mb-1.5 ml-1">Email Address *</label>

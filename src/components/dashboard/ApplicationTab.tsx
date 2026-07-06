@@ -9,6 +9,7 @@ interface ApplicationTabProps {
   plans: PricingPlan[];
   selectedPlan: PricingPlan | null;
   onSelectPlan: (plan: PricingPlan) => void;
+  packages: any[];
   paymentMethods: PaymentQR[];
   selectedPayment: PaymentQR | null;
   onSelectPayment: (pay: PaymentQR) => void;
@@ -36,50 +37,10 @@ interface ApplicationTabProps {
   finalPrice: number;
 }
 
-const packagePlans = [
-  {
-    id: "package_a",
-    type: "package_a",
-    name: "Package A: Small Enterprise",
-    price: 2900,
-    period: "yr",
-    description: "Combines Small annual membership (discounted to ₱1,700) with 4 Coffee Connections session passes (₱1,200). Total value: ₱4,000.",
-    benefits: [
-      "Small / Individual Annual Membership (₱1,700)",
-      "4 Coffee Connections passes (₱300 per session = ₱1,200)",
-      "Total savings of ₱1,100"
-    ]
-  },
-  {
-    id: "package_b",
-    type: "package_b",
-    name: "Package B: Medium Enterprise",
-    price: 3800,
-    period: "yr",
-    description: "Combines Medium annual membership (discounted to ₱2,600) with 4 Coffee Connections session passes (₱1,200). Total value: ₱5,000.",
-    benefits: [
-      "Medium / SME Annual Membership (₱2,600)",
-      "4 Coffee Connections passes (₱300 per session = ₱1,200)",
-      "Total savings of ₱1,200"
-    ]
-  },
-  {
-    id: "package_c",
-    type: "package_c",
-    name: "Package C: Large Enterprise",
-    price: 4700,
-    period: "yr",
-    description: "Combines Large annual membership (discounted to ₱3,500) with 4 Coffee Connections session passes (₱1,200). Total value: ₱6,000.",
-    benefits: [
-      "Large / Corporate Annual Membership (₱3,500)",
-      "4 Coffee Connections passes (₱300 per session = ₱1,200)",
-      "Total savings of ₱1,300"
-    ]
-  }
-];
+
 
 const ApplicationTab: React.FC<ApplicationTabProps> = ({
-  plans, selectedPlan, onSelectPlan,
+  plans, selectedPlan, onSelectPlan, packages,
   paymentMethods, selectedPayment, onSelectPayment,
   formError, actionLoading, onSubmit,
   companyName, setCompanyName,
@@ -134,39 +95,41 @@ const ApplicationTab: React.FC<ApplicationTabProps> = ({
             </div>
           </div>
 
-          <div className="pt-6 border-t border-gray-100">
-            <h3 className="text-base font-heading font-black text-[#0D1A14] mb-2">Special Membership Package Deals</h3>
-            <p className="text-xs text-gray-500 mb-6">These packages bundle the membership fee with Coffee Connections session passes at a discounted rate.</p>
+          {packages.length > 0 && (
+            <div className="pt-6 border-t border-gray-100">
+              <h3 className="text-base font-heading font-black text-[#0D1A14] mb-2">Special Membership Package Deals</h3>
+              <p className="text-xs text-gray-500 mb-6">These packages bundle the membership fee with Coffee Connections session passes at a discounted rate.</p>
 
-            <div className="grid sm:grid-cols-3 gap-4">
-              {packagePlans.map((plan) => (
-                <div
-                  key={plan.id}
-                  onClick={() => {
-                    onSelectPlan(plan as any);
-                    setAppliedPromo(null);
-                    setPromoCode("");
-                  }}
-                  className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col relative overflow-hidden ${
-                    selectedPlan?.id === plan.id
-                      ? "border-green-700 bg-green-50/20"
-                      : "border-gray-100 hover:border-green-200 bg-white"
-                  }`}
-                >
-                  <div className="absolute top-0 right-0 bg-green-700 text-white text-[8px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-bl">
-                    Package Deal
+              <div className="grid sm:grid-cols-3 gap-4">
+                {packages.map((plan) => (
+                  <div
+                    key={plan.id}
+                    onClick={() => {
+                      onSelectPlan(plan);
+                      setAppliedPromo(null);
+                      setPromoCode("");
+                    }}
+                    className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col relative overflow-hidden ${
+                      selectedPlan?.id === plan.id
+                        ? "border-green-700 bg-green-50/20"
+                        : "border-gray-100 hover:border-green-200 bg-white"
+                    }`}
+                  >
+                    <div className="absolute top-0 right-0 bg-green-700 text-white text-[8px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-bl">
+                      Package Deal
+                    </div>
+                    <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-gray-400 mb-1">Package</span>
+                    <h4 className="font-heading font-black text-[12px] text-gray-900 leading-tight mb-1 pr-12">{plan.name}</h4>
+                    <span className="text-lg font-heading font-black text-green-700 mb-2">PHP {plan.price.toLocaleString()}</span>
+                    <p className="text-[11px] text-gray-400 mb-4 leading-relaxed flex-1">{plan.description}</p>
+                    <div className="text-[11px] font-semibold text-green-700 flex items-center gap-1 mt-auto">
+                      Select Package <ArrowRight size={10} />
+                    </div>
                   </div>
-                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-gray-400 mb-1">Package</span>
-                  <h4 className="font-heading font-black text-[12px] text-gray-900 leading-tight mb-1 pr-12">{plan.name}</h4>
-                  <span className="text-lg font-heading font-black text-green-700 mb-2">PHP {plan.price.toLocaleString()}</span>
-                  <p className="text-[11px] text-gray-400 mb-4 leading-relaxed flex-1">{plan.description}</p>
-                  <div className="text-[11px] font-semibold text-green-700 flex items-center gap-1 mt-auto">
-                    Select Package <ArrowRight size={10} />
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Step 2 — Payment details (conditional on plan selection) */}

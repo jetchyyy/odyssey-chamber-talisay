@@ -286,7 +286,8 @@ export const DirectoryTab: React.FC = () => {
           instagram_url: biz.pending_changes.instagram_url !== undefined ? biz.pending_changes.instagram_url : biz.instagram_url,
           logo_url: biz.pending_changes.logo_url !== undefined ? biz.pending_changes.logo_url : biz.logo_url,
           pending_changes: null,
-          approval_status: "approved"
+          approval_status: "approved",
+          is_verified: true
         })
         .eq("id", biz.id);
       if (error) throw error;
