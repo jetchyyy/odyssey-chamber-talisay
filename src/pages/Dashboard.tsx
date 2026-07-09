@@ -299,11 +299,15 @@ const Dashboard: React.FC = () => {
         : [];
       setDbPackages(mappedPackages);
 
-      // Pre-select package from URL parameter if present
+      // Pre-select package or plan from URL parameter if present
       const params = new URLSearchParams(window.location.search);
       const preselectedPkgId = params.get("package");
+      const preselectedPlanType = params.get("plan");
       if (preselectedPkgId && mappedPackages.length > 0) {
         const found = mappedPackages.find(p => p.id === preselectedPkgId);
+        if (found) setSelectedPlan(found);
+      } else if (preselectedPlanType && plansData && plansData.length > 0) {
+        const found = plansData.find(p => p.type === preselectedPlanType || p.id === preselectedPlanType);
         if (found) setSelectedPlan(found);
       }
 

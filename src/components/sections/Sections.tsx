@@ -360,7 +360,7 @@ export const MembershipSection: React.FC = () => {
   }));
 
   return (
-    <section className="py-32 section-shell" aria-label="Membership plans">
+    <section id="membership" className="py-32 section-shell" aria-label="Membership plans">
       <div className="container mx-auto px-4 md:px-10 max-w-6xl">
         <div className="text-center max-w-xl mx-auto mb-16">
           <motion.span custom={0} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}

@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { Link } from "react-router-dom";
 import { MapPin, Phone, Mail, ArrowUpRight, Share2, Play, Globe } from "lucide-react";
 
@@ -26,9 +26,9 @@ const footerLinks = {
   membership: {
     label: "Membership",
     links: [
-      { name: "Join the Chamber", path: "/join" },
-      { name: "Member Benefits", path: "/benefits" },
-      { name: "Membership Plans", path: "/plans" },
+      { name: "Join the Chamber", path: "/register" },
+      { name: "Member Benefits", path: "/#membership" },
+      { name: "Membership Plans", path: "/#membership" },
       { name: "Member Portal", path: "/login" },
       { name: "Business Directory", path: "/directory" },
     ],

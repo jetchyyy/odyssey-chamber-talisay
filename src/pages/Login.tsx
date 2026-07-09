@@ -47,7 +47,12 @@ const Login: React.FC = () => {
         } else {
           const params = new URLSearchParams(window.location.search);
           const pkgParam = params.get("package");
-          navigate(pkgParam ? `/dashboard?package=${pkgParam}` : "/dashboard");
+          const planParam = params.get("plan");
+          const nextParams = new URLSearchParams();
+          if (pkgParam) nextParams.set("package", pkgParam);
+          if (planParam) nextParams.set("plan", planParam);
+          const searchStr = nextParams.toString();
+          navigate(searchStr ? `/dashboard?${searchStr}` : "/dashboard");
         }
       }
 
