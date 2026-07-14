@@ -22,6 +22,7 @@ import { PasswordTab } from "../components/admin/PasswordTab";
 import { PromosTab } from "../components/admin/PromosTab";
 import { PackagesTab } from "../components/admin/PackagesTab";
 import StoriesAdminTab from "../components/admin/StoriesAdminTab";
+import { PrivacyTab } from "../components/admin/PrivacyTab";
 
 export const Admin: React.FC = () => {
   const { user, loading, isAdmin } = useAuth();
@@ -29,11 +30,11 @@ export const Admin: React.FC = () => {
 
   // Active Tab routing state
   const [activeTab, setActiveTab] = useState<
-    "analytics" | "applications" | "users" | "members" | "events" | "pricing" | "packages" | "qrs" | "news" | "directory" | "board" | "password" | "promos" | "stories"
+    "analytics" | "applications" | "users" | "members" | "events" | "pricing" | "packages" | "qrs" | "news" | "directory" | "board" | "password" | "promos" | "stories" | "privacy"
   >(()  => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    const validTabs = ["analytics", "applications", "users", "members", "events", "pricing", "packages", "qrs", "news", "directory", "board", "password", "promos", "stories"];
+    const validTabs = ["analytics", "applications", "users", "members", "events", "pricing", "packages", "qrs", "news", "directory", "board", "password", "promos", "stories", "privacy"];
     return (tab && validTabs.includes(tab) ? tab : "analytics") as any;
   });
 
@@ -108,6 +109,7 @@ export const Admin: React.FC = () => {
             { id: "board", label: "Board of Directors", icon: Shield },
             { id: "promos", label: "Promo Codes CMS", icon: Tag },
             { id: "stories", label: "Member Stories CMS", icon: MessageSquareQuote },
+            { id: "privacy", label: "Privacy Policy CMS", icon: Shield },
             { id: "password", label: "Change Password", icon: Key },
           ].map(({ id, label, icon: Icon, count }) => (
             <button
@@ -163,6 +165,7 @@ export const Admin: React.FC = () => {
             { id: "board", label: "Board", icon: Shield },
             { id: "promos", label: "Promo Codes", icon: Tag },
             { id: "stories", label: "Stories CMS", icon: MessageSquareQuote },
+            { id: "privacy", label: "Privacy Policy", icon: Shield },
             { id: "password", label: "Change Password", icon: Key },
           ].map(({ id, label, icon: Icon, count }) => (
             <button
@@ -231,6 +234,7 @@ export const Admin: React.FC = () => {
           {activeTab === "board" && <BoardTab key={refreshKey} />}
           {activeTab === "promos" && <PromosTab key={refreshKey} />}
           {activeTab === "stories" && <StoriesAdminTab key={refreshKey} />}
+          {activeTab === "privacy" && <PrivacyTab key={refreshKey} />}
           {activeTab === "password" && <PasswordTab key={refreshKey} />}
         </div>
       </main>

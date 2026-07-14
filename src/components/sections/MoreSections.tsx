@@ -119,6 +119,15 @@ export const EventsSection: React.FC = () => {
   const [guestEmail, setGuestEmail] = useState("");
   const [regQrCodePass, setRegQrCodePass] = useState("");
 
+  // Privacy agreement states
+  const [privacyTitle, setPrivacyTitle] = useState("Data Privacy Agreement");
+  const [privacyContent, setPrivacyContent] = useState("");
+  const [privacyActive, setPrivacyActive] = useState(false);
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+  const [partnerName, setPartnerName] = useState("");
+  const [dataSharingScope, setDataSharingScope] = useState("none");
+  const [agreedToPartnerSharing, setAgreedToPartnerSharing] = useState(false);
+
   // Promo code states
   const [promoCode, setPromoCode] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<any>(null);
@@ -212,6 +221,20 @@ export const EventsSection: React.FC = () => {
         if (data) {
           setDbEvents(data);
           setHasFetchedEvents(true);
+          
+          // Fetch privacy policy settings
+          const { data: privacyData } = await supabase
+            .from("privacy_settings")
+            .select("*")
+            .eq("is_active", true)
+            .order("created_at", { ascending: false });
+          if (privacyData && privacyData.length > 0) {
+            setPrivacyTitle(privacyData[0].title);
+            setPrivacyContent(privacyData[0].content);
+            setPrivacyActive(privacyData[0].is_active);
+            setPartnerName(privacyData[0].partner_name || "");
+            setDataSharingScope(privacyData[0].data_sharing_scope || "none");
+          }
           
           if (data.length > 0) {
             // Check query parameters to see if we should auto-open a registration modal
@@ -315,6 +338,8 @@ export const EventsSection: React.FC = () => {
     setLoginError(null);
     setLoginLoading(false);
     setShowLoginPassword(false);
+    setAgreedToPrivacy(false);
+    setAgreedToPartnerSharing(false);
   };
 
   const handleCloseRegModal = () => {
@@ -328,6 +353,8 @@ export const EventsSection: React.FC = () => {
     setPaymentProofPreview("");
     setRegQrCodePass("");
     setAppliedPromo(null);
+    setAgreedToPrivacy(false);
+    setAgreedToPartnerSharing(false);
     setPromoCode("");
     setMemberPromptState("prompt");
     setLoginEmail("");
@@ -346,7 +373,18 @@ export const EventsSection: React.FC = () => {
     const regEmail = user ? profile?.email : guestEmail.trim();
 
     if (!regName || !regEmail) {
-      setRegError("Please provide your name and email address.");
+      setRegError("Please fill in all registration fields.");
+      return;
+    }
+
+    if (privacyActive && !agreedToPrivacy) {
+      setRegError("You must agree to the Data Privacy Act before registering.");
+      return;
+    }
+
+    const showPartnerCheckbox = privacyActive && !!partnerName && (dataSharingScope === "events_only" || dataSharingScope === "both");
+    if (showPartnerCheckbox && !agreedToPartnerSharing) {
+      setRegError(`You must agree to share your data with our partner ${partnerName} before registering.`);
       return;
     }
 
@@ -390,6 +428,8 @@ export const EventsSection: React.FC = () => {
         discount_amount: currentDiscountAmount,
         final_amount: priceAfterDiscount,
         used_package_credit_id: usePackagePass ? userCredits[0].id : null,
+        agreed_to_privacy: agreedToPrivacy,
+        agreed_to_partner_sharing: showPartnerCheckbox ? agreedToPartnerSharing : false,
       };
 
       if (proofUrl) {
@@ -1142,10 +1182,50 @@ export const EventsSection: React.FC = () => {
                       </div>
                     )}
 
+                    {privacyActive && privacyContent && (
+                      <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50/50 space-y-3 mt-4 text-left">
+                        <h4 className="text-[11px] font-heading font-black text-gray-900 uppercase tracking-wider">{privacyTitle}</h4>
+                        <div className="max-h-28 overflow-y-auto text-[10px] text-gray-500 font-normal leading-relaxed pr-1 whitespace-pre-line border-t border-gray-150 pt-2 scrollbar-thin">
+                          {privacyContent}
+                        </div>
+                        <div className="flex flex-col gap-2.5 border-t border-gray-150 pt-2.5">
+                          <div className="flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              id="evt_agree_privacy_chk"
+                              checked={agreedToPrivacy}
+                              onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                              className="rounded border-gray-300 text-green-700 focus:ring-green-500 w-4 h-4 cursor-pointer mt-0.5"
+                              required
+                            />
+                            <label htmlFor="evt_agree_privacy_chk" className="text-[11px] text-gray-600 font-semibold cursor-pointer select-none">
+                              I consent to the collection and processing of my personal data as described in this agreement. *
+                            </label>
+                          </div>
+
+                          {!!partnerName && (dataSharingScope === "events_only" || dataSharingScope === "both") && (
+                            <div className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                id="evt_agree_partner_chk"
+                                checked={agreedToPartnerSharing}
+                                onChange={(e) => setAgreedToPartnerSharing(e.target.checked)}
+                                className="rounded border-gray-300 text-green-700 focus:ring-green-500 w-4 h-4 cursor-pointer mt-0.5"
+                                required
+                              />
+                              <label htmlFor="evt_agree_partner_chk" className="text-[11px] text-gray-600 font-semibold cursor-pointer select-none">
+                                You also agree to share your data with our partner <span className="font-bold text-gray-900">{partnerName}</span>. *
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     <button
                       type="submit"
                       disabled={regLoading}
-                      className="w-full btn-premium bg-green-700 hover:bg-green-600 text-white justify-center shadow-diffuse text-xs"
+                      className="w-full btn-premium bg-green-700 hover:bg-green-600 text-white justify-center shadow-diffuse text-xs mt-4"
                     >
                       {regLoading ? (
                         <span className="flex items-center gap-1.5"><Loader2 size={13} className="animate-spin" /> Submitting...</span>

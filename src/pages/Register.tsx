@@ -84,6 +84,16 @@ const Register: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // Privacy agreement states
+  const [privacyTitle, setPrivacyTitle] = useState("Data Privacy Agreement");
+  const [privacyContent, setPrivacyContent] = useState("");
+  const [privacyActive, setPrivacyActive] = useState(false);
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+  const [partnerName, setPartnerName] = useState("");
+  const [dataSharingScope, setDataSharingScope] = useState("none");
+  const [agreedToPartnerSharing, setAgreedToPartnerSharing] = useState(false);
+  
   const navigate = useNavigate();
 
   // Fetch plans and packages from Supabase
@@ -100,6 +110,20 @@ const Register: React.FC = () => {
           .select("*")
           .eq("is_active", true)
           .order("price", { ascending: true });
+        
+        // Fetch privacy policy
+        const { data: privacyData } = await supabase
+          .from("privacy_settings")
+          .select("*")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false });
+        if (privacyData && privacyData.length > 0) {
+          setPrivacyTitle(privacyData[0].title);
+          setPrivacyContent(privacyData[0].content);
+          setPrivacyActive(privacyData[0].is_active);
+          setPartnerName(privacyData[0].partner_name || "");
+          setDataSharingScope(privacyData[0].data_sharing_scope || "none");
+        }
 
         const finalPlans = plansData && plansData.length > 0 ? plansData : DEFAULT_PLANS;
         const finalPkgs = packagesData && packagesData.length > 0 ? packagesData : DEFAULT_PACKAGES;
@@ -184,6 +208,17 @@ const Register: React.FC = () => {
       return;
     }
 
+    if (privacyActive && !agreedToPrivacy) {
+      setError("You must agree to the Data Privacy Act before submitting your application.");
+      return;
+    }
+
+    const showPartnerCheckbox = privacyActive && !!partnerName && (dataSharingScope === "membership_only" || dataSharingScope === "both");
+    if (showPartnerCheckbox && !agreedToPartnerSharing) {
+      setError(`You must agree to share your data with our partner ${partnerName} to submit your application.`);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -196,6 +231,8 @@ const Register: React.FC = () => {
           data: {
             full_name: fullName,
             role: "member",
+            agreed_to_privacy: agreedToPrivacy,
+            agreed_to_partner_sharing: showPartnerCheckbox ? agreedToPartnerSharing : false,
           },
         },
       });
@@ -511,6 +548,46 @@ const Register: React.FC = () => {
                       </button>
                     </div>
                   </div>
+
+                  {privacyActive && privacyContent && (
+                    <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-3">
+                      <h4 className="text-xs font-heading font-black text-gray-900 uppercase tracking-wider">{privacyTitle}</h4>
+                      <div className="max-h-32 overflow-y-auto text-[11px] text-gray-500 font-normal leading-relaxed pr-2 whitespace-pre-line border-t border-gray-150 pt-2 scrollbar-thin">
+                        {privacyContent}
+                      </div>
+                      <div className="flex flex-col gap-3 border-t border-gray-150 pt-3 text-left">
+                        <div className="flex items-start gap-2.5">
+                          <input
+                            type="checkbox"
+                            id="agree_privacy_chk"
+                            checked={agreedToPrivacy}
+                            onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                            className="rounded border-gray-300 text-green-700 focus:ring-green-500 w-4 h-4 cursor-pointer mt-0.5"
+                            required
+                          />
+                          <label htmlFor="agree_privacy_chk" className="text-xs text-gray-600 font-semibold cursor-pointer select-none">
+                            I consent to the collection and processing of my personal data as described in this agreement. *
+                          </label>
+                        </div>
+
+                        {!!partnerName && (dataSharingScope === "membership_only" || dataSharingScope === "both") && (
+                          <div className="flex items-start gap-2.5">
+                            <input
+                              type="checkbox"
+                              id="agree_partner_chk"
+                              checked={agreedToPartnerSharing}
+                              onChange={(e) => setAgreedToPartnerSharing(e.target.checked)}
+                              className="rounded border-gray-300 text-green-700 focus:ring-green-500 w-4 h-4 cursor-pointer mt-0.5"
+                              required
+                            />
+                            <label htmlFor="agree_partner_chk" className="text-xs text-gray-600 font-semibold cursor-pointer select-none">
+                              You also agree to share your data with our partner <span className="font-bold text-gray-900">{partnerName}</span>. *
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <button
                     type="submit"
