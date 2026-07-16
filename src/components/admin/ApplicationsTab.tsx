@@ -11,6 +11,7 @@ interface ApplicationRow {
   user_id: string;
   membership_type: string;
   package_availed?: string | null;
+  membership_package_id?: string | null;
   company_name: string;
   business_category: string;
   phone: string;
@@ -58,6 +59,7 @@ export const ApplicationsTab: React.FC = () => {
   const [dbPackages, setDbPackages] = useState<any[]>([]);
   const [appMembershipType, setAppMembershipType] = useState("");
   const [appPackageAvailed, setAppPackageAvailed] = useState<string | null>(null);
+  const [appMembershipPackageId, setAppMembershipPackageId] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -65,7 +67,7 @@ export const ApplicationsTab: React.FC = () => {
       const { data: appsData, error } = await supabase
         .from("membership_applications")
         .select(`
-          id, user_id, membership_type, package_availed, company_name, business_category, phone, business_address, 
+          id, user_id, membership_type, package_availed, membership_package_id, company_name, business_category, phone, business_address, 
           payment_method, payment_reference, payment_proof_url, status, invoice_number, created_at,
           promo_code_id, discount_amount, final_amount,
           profiles ( full_name, email ),
@@ -214,7 +216,8 @@ export const ApplicationsTab: React.FC = () => {
     invoiceNumber: string,
     newStatus: string,
     newMembershipType: string,
-    newPackageAvailed: string | null
+    newPackageAvailed: string | null,
+    newMembershipPackageId: string | null
   ) => {
     let formattedInvoice = invoiceNumber.trim();
     if (formattedInvoice && !formattedInvoice.toUpperCase().startsWith("INV-")) {
@@ -231,7 +234,8 @@ export const ApplicationsTab: React.FC = () => {
           payment_status: newStatus === "approved" ? "approved" : (newStatus === "rejected" ? "rejected" : "pending"),
           invoice_number: formattedInvoice || null,
           membership_type: newMembershipType,
-          package_availed: newPackageAvailed || null
+          package_availed: newPackageAvailed || null,
+          membership_package_id: newMembershipPackageId || null
         })
         .eq("id", app.id);
       if (appError) throw appError;
@@ -534,6 +538,7 @@ export const ApplicationsTab: React.FC = () => {
                         setAppModalStatus(app.status);
                         setAppMembershipType(app.membership_type);
                         setAppPackageAvailed(app.package_availed || null);
+                        setAppMembershipPackageId(app.membership_package_id || null);
                         setShowAppInvoiceModal(true);
                       }}
                       className="px-2.5 py-1 rounded border border-white/5 text-[10px] font-bold text-green-400 bg-[#11241C] hover:bg-[#152F24] transition-colors cursor-pointer flex items-center gap-1"
@@ -627,8 +632,33 @@ export const ApplicationsTab: React.FC = () => {
                   <div>
                     <label className="block text-gray-400 text-[10px] mb-1 font-bold uppercase tracking-wider">Package Availed (Editable)</label>
                     <select
-                      value={appPackageAvailed || ""}
-                      onChange={(e) => setAppPackageAvailed(e.target.value || null)}
+                      value={appMembershipPackageId || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAppMembershipPackageId(val || null);
+                        
+                        // Map to legacy package_availed value ('package_a', 'package_b', 'package_c')
+                        const resolvedPackages = dbPackages.length > 0 ? dbPackages : [
+                          { id: "package_a", name: "Package A: Small Enterprise" },
+                          { id: "package_b", name: "Package B: Medium Enterprise" },
+                          { id: "package_c", name: "Package C: Large Enterprise" }
+                        ];
+                        const pkg = resolvedPackages.find(p => p.id === val);
+                        if (pkg) {
+                          const pkgNameLower = pkg.name.toLowerCase();
+                          if (pkgNameLower.includes("small") || pkg.id === "package_a") {
+                            setAppPackageAvailed("package_a");
+                          } else if (pkgNameLower.includes("medium") || pkg.id === "package_b") {
+                            setAppPackageAvailed("package_b");
+                          } else if (pkgNameLower.includes("large") || pkg.id === "package_c") {
+                            setAppPackageAvailed("package_c");
+                          } else {
+                            setAppPackageAvailed("package_a"); // default fallback
+                          }
+                        } else {
+                          setAppPackageAvailed(null);
+                        }
+                      }}
                       className="w-full px-3 py-2 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none cursor-pointer text-xs font-sans"
                     >
                       <option value="">None (Standard Plan)</option>
@@ -727,7 +757,7 @@ export const ApplicationsTab: React.FC = () => {
               <div className="flex flex-col gap-2 pt-6 mt-6 border-t border-white/5">
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleSaveAppInvoiceAndStatus(selectedApp, appInvoiceNumInput, appModalStatus, appMembershipType, appPackageAvailed)}
+                    onClick={() => handleSaveAppInvoiceAndStatus(selectedApp, appInvoiceNumInput, appModalStatus, appMembershipType, appPackageAvailed, appMembershipPackageId)}
                     disabled={actionLoading}
                     className="flex-1 py-2.5 rounded-xl bg-green-700 hover:bg-green-600 text-white font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5"
                   >
