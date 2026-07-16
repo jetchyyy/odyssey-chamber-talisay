@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../lib/supabase";
 import { useNotification } from "../../context/NotificationContext";
-import { 
-  Check, X, Loader2, Receipt, CheckCircle2, FileDown, Tag 
+import {
+  Check, X, Loader2, Receipt, CheckCircle2, FileDown, Tag
 } from "lucide-react";
 
 interface ApplicationRow {
@@ -54,6 +54,10 @@ export const ApplicationsTab: React.FC = () => {
   const [selectedApp, setSelectedApp] = useState<ApplicationRow | null>(null);
   const [appInvoiceNumInput, setAppInvoiceNumInput] = useState("");
   const [appModalStatus, setAppModalStatus] = useState("pending");
+  const [dbPlans, setDbPlans] = useState<any[]>([]);
+  const [dbPackages, setDbPackages] = useState<any[]>([]);
+  const [appMembershipType, setAppMembershipType] = useState("");
+  const [appPackageAvailed, setAppPackageAvailed] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -70,6 +74,18 @@ export const ApplicationsTab: React.FC = () => {
         .order("created_at", { ascending: false });
       if (error) throw error;
       if (appsData) setApplications(appsData as any);
+
+      // Load pricing & packages for dropdown selection
+      const { data: plansData } = await supabase
+        .from("membership_pricing")
+        .select("type, name")
+        .eq("is_active", true);
+      const { data: packagesData } = await supabase
+        .from("membership_packages")
+        .select("id, name")
+        .eq("is_active", true);
+      if (plansData) setDbPlans(plansData);
+      if (packagesData) setDbPackages(packagesData);
     } catch (err: any) {
       toast.error("Failed to load applications: " + err.message);
     } finally {
@@ -196,7 +212,9 @@ export const ApplicationsTab: React.FC = () => {
   const handleSaveAppInvoiceAndStatus = async (
     app: ApplicationRow,
     invoiceNumber: string,
-    newStatus: string
+    newStatus: string,
+    newMembershipType: string,
+    newPackageAvailed: string | null
   ) => {
     let formattedInvoice = invoiceNumber.trim();
     if (formattedInvoice && !formattedInvoice.toUpperCase().startsWith("INV-")) {
@@ -208,10 +226,12 @@ export const ApplicationsTab: React.FC = () => {
       // 1. Update application status, payment status, and invoice number
       const { error: appError } = await supabase
         .from("membership_applications")
-        .update({ 
-          status: newStatus, 
+        .update({
+          status: newStatus,
           payment_status: newStatus === "approved" ? "approved" : (newStatus === "rejected" ? "rejected" : "pending"),
-          invoice_number: formattedInvoice || null
+          invoice_number: formattedInvoice || null,
+          membership_type: newMembershipType,
+          package_availed: newPackageAvailed || null
         })
         .eq("id", app.id);
       if (appError) throw appError;
@@ -238,7 +258,7 @@ export const ApplicationsTab: React.FC = () => {
           .from("profiles")
           .update({
             membership_status: "active",
-            membership_type: app.membership_type,
+            membership_type: newMembershipType,
             company_name: app.company_name,
             phone: app.phone,
             business_address: app.business_address,
@@ -352,9 +372,10 @@ export const ApplicationsTab: React.FC = () => {
       <body>
         <div class="header">
           <div class="logo-section">
-            <h1>Odyssey Chamber</h1>
-            <p>Chamber of Commerce and Industry</p>
-            <p>Talisay City, Cebu, Philippines</p>
+            <h1>City of Talisay Chamber of Commerce</h1>
+            <h1>Trade and Industry Inc<h1>
+            <p>Paseo Ricardo Commercial Center, Nonoc, Rafael Rabaya Rd City of Talisay, Cebu, Philippines</p>
+            <p>+639623184926 | talisaychamber@gmail.com </p>
           </div>
           <div class="invoice-details">
             <h2>OFFICIAL RECEIPT</h2>
@@ -478,7 +499,7 @@ export const ApplicationsTab: React.FC = () => {
                   <div className="text-white font-bold">{app.profiles?.full_name || "N/A"}</div>
                   <div className="text-[11px] text-[#8A9690] font-normal mt-0.5">{app.profiles?.email}</div>
                 </td>
-                 <td className="py-4.5">
+                <td className="py-4.5">
                   <div>{getPlanDisplayName(app.membership_type)}</div>
                   {app.discount_amount && app.discount_amount > 0 ? (
                     <div className="text-[10px] text-green-400 font-bold mt-0.5 flex items-center gap-1">
@@ -495,13 +516,12 @@ export const ApplicationsTab: React.FC = () => {
                   <div className="text-[11px] text-[#8A9690] font-mono mt-0.5">{app.payment_reference}</div>
                 </td>
                 <td className="py-4.5">
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                    app.status === "pending"
-                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/25"
-                      : app.status === "approved"
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${app.status === "pending"
+                    ? "bg-amber-500/10 text-amber-400 border border-amber-500/25"
+                    : app.status === "approved"
                       ? "bg-green-500/10 text-green-400 border border-green-500/25"
                       : "bg-red-500/10 text-red-400 border border-red-500/25"
-                  }`}>
+                    }`}>
                     {app.status}
                   </span>
                 </td>
@@ -512,6 +532,8 @@ export const ApplicationsTab: React.FC = () => {
                         setSelectedApp(app);
                         setAppInvoiceNumInput(app.invoice_number || "");
                         setAppModalStatus(app.status);
+                        setAppMembershipType(app.membership_type);
+                        setAppPackageAvailed(app.package_availed || null);
                         setShowAppInvoiceModal(true);
                       }}
                       className="px-2.5 py-1 rounded border border-white/5 text-[10px] font-bold text-green-400 bg-[#11241C] hover:bg-[#152F24] transition-colors cursor-pointer flex items-center gap-1"
@@ -584,23 +606,43 @@ export const ApplicationsTab: React.FC = () => {
 
               {/* Body */}
               <div className="space-y-4 text-xs font-semibold text-gray-300">
-                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Membership Tier:</span>
-                    <span className="text-white">{getPlanDisplayName(selectedApp.membership_type)} Plan</span>
+                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3">
+                  <div>
+                    <label className="block text-gray-400 text-[10px] mb-1 font-bold uppercase tracking-wider">Membership Tier (Editable)</label>
+                    <select
+                      value={appMembershipType}
+                      onChange={(e) => setAppMembershipType(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none cursor-pointer text-xs font-sans"
+                    >
+                      {(dbPlans.length > 0 ? dbPlans : [
+                        { type: "individual", name: "Small" },
+                        { type: "sme", name: "Medium" },
+                        { type: "corporate", name: "Large" }
+                      ]).map(plan => (
+                        <option key={plan.type} value={plan.type}>{plan.name} ({plan.type})</option>
+                      ))}
+                    </select>
                   </div>
-                  {selectedApp.package_availed && (
-                    <div className="flex justify-between text-amber-400">
-                      <span className="text-gray-400">Package Availed:</span>
-                      <span className="font-bold">
-                        {selectedApp.package_availed === "package_a" ? "Package A (Small)" :
-                         selectedApp.package_availed === "package_b" ? "Package B (Medium)" :
-                         selectedApp.package_availed === "package_c" ? "Package C (Large)" :
-                         selectedApp.package_availed}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
+
+                  <div>
+                    <label className="block text-gray-400 text-[10px] mb-1 font-bold uppercase tracking-wider">Package Availed (Editable)</label>
+                    <select
+                      value={appPackageAvailed || ""}
+                      onChange={(e) => setAppPackageAvailed(e.target.value || null)}
+                      className="w-full px-3 py-2 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none cursor-pointer text-xs font-sans"
+                    >
+                      <option value="">None (Standard Plan)</option>
+                      {(dbPackages.length > 0 ? dbPackages : [
+                        { id: "package_a", name: "Package A: Small Enterprise" },
+                        { id: "package_b", name: "Package B: Medium Enterprise" },
+                        { id: "package_c", name: "Package C: Large Enterprise" }
+                      ]).map(pkg => (
+                        <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex justify-between border-t border-white/5 pt-2 mt-2">
                     <span className="text-gray-400">Payment Reference:</span>
                     <span className="font-mono text-white">{selectedApp.payment_reference || "N/A"}</span>
                   </div>
@@ -608,7 +650,7 @@ export const ApplicationsTab: React.FC = () => {
                     <span className="text-gray-400">Payment Method:</span>
                     <span className="capitalize text-white">{selectedApp.payment_method.replace("_", " ")}</span>
                   </div>
-                   {selectedApp.company_name && (
+                  {selectedApp.company_name && (
                     <div className="flex justify-between">
                       <span className="text-gray-400">Company:</span>
                       <span className="text-white">{selectedApp.company_name}</span>
@@ -685,14 +727,20 @@ export const ApplicationsTab: React.FC = () => {
               <div className="flex flex-col gap-2 pt-6 mt-6 border-t border-white/5">
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleSaveAppInvoiceAndStatus(selectedApp, appInvoiceNumInput, appModalStatus)}
+                    onClick={() => handleSaveAppInvoiceAndStatus(selectedApp, appInvoiceNumInput, appModalStatus, appMembershipType, appPackageAvailed)}
                     disabled={actionLoading}
                     className="flex-1 py-2.5 rounded-xl bg-green-700 hover:bg-green-600 text-white font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5"
                   >
                     Save Details
                   </button>
                   <button
-                    onClick={() => handlePrintAppInvoice({ ...selectedApp, invoice_number: appInvoiceNumInput, status: appModalStatus })}
+                    onClick={() => handlePrintAppInvoice({
+                      ...selectedApp,
+                      invoice_number: appInvoiceNumInput,
+                      status: appModalStatus,
+                      membership_type: appMembershipType,
+                      package_availed: appPackageAvailed
+                    })}
                     className="px-4 py-2.5 border border-white/10 hover:bg-white/5 rounded-xl text-white cursor-pointer font-bold transition-colors flex items-center gap-1.5"
                   >
                     <FileDown size={14} /> Print PDF
