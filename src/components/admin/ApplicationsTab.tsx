@@ -378,7 +378,7 @@ export const ApplicationsTab: React.FC = () => {
             <p>+639623184926 | talisaychamber@gmail.com </p>
           </div>
           <div class="invoice-details">
-            <h2>OFFICIAL RECEIPT</h2>
+            <h2>Temporary Invoice</h2>
             <p><strong>Receipt #:</strong> ${app.invoice_number || "Draft"}</p>
             <p><strong>Date:</strong> ${todayStr}</p>
             <p><strong>Status:</strong> ${app.status.toUpperCase()}</p>
@@ -452,7 +452,7 @@ export const ApplicationsTab: React.FC = () => {
 
         <div class="footer">
           <p>Thank you for your active participation and membership in the Odyssey Chamber.</p>
-          <p>This is a computer generated official invoice receipt document copy. No signature required.</p>
+          <p>This is a computer generated temporary invoice document copy. No signature required.</p>
           <button onclick="window.print()" style="margin-top: 15px; padding: 6px 15px; background: #15803d; color: #fff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">Print Receipt</button>
         </div>
         <script>
