@@ -84,7 +84,7 @@ export const ApplicationsTab: React.FC = () => {
         .eq("is_active", true);
       const { data: packagesData } = await supabase
         .from("membership_packages")
-        .select("id, name")
+        .select("id, name, price, description")
         .eq("is_active", true);
       if (plansData) setDbPlans(plansData);
       if (packagesData) setDbPackages(packagesData);
@@ -335,9 +335,39 @@ export const ApplicationsTab: React.FC = () => {
 
     const tierName = getPlanDisplayName(app.membership_type);
     let planPrice = 0;
-    if (app.membership_type === "individual") planPrice = 1500;
-    if (app.membership_type === "sme") planPrice = 5000;
-    if (app.membership_type === "corporate") planPrice = 15000;
+    let descriptionText = "Chamber directory listing, business networking access, events, and resources.";
+    let itemName = `Annual Chamber Membership Fee - ${tierName} Tier`;
+
+    if (app.package_availed) {
+      if (app.package_availed === "package_a") {
+        planPrice = 2900;
+        itemName = "Package A: Small Enterprise Membership Package";
+        descriptionText = "Combines Small annual membership with 4 Coffee Connections session passes. (Save PHP 1,100)";
+      } else if (app.package_availed === "package_b") {
+        planPrice = 3800;
+        itemName = "Package B: Medium Enterprise Membership Package";
+        descriptionText = "Combines Medium annual membership with 4 Coffee Connections session passes. (Save PHP 1,200)";
+      } else if (app.package_availed === "package_c") {
+        planPrice = 4700;
+        itemName = "Package C: Large Enterprise Membership Package";
+        descriptionText = "Combines Large annual membership with 4 Coffee Connections session passes. (Save PHP 1,300)";
+      } else {
+        const pkg = dbPackages.find(p => p.id === app.package_availed);
+        if (pkg) {
+          planPrice = Number(pkg.price) || 0;
+          itemName = pkg.name;
+          descriptionText = pkg.description || "Chamber membership package deal.";
+        } else {
+          if (app.membership_type === "individual") planPrice = 1500;
+          if (app.membership_type === "sme") planPrice = 5000;
+          if (app.membership_type === "corporate") planPrice = 15000;
+        }
+      }
+    } else {
+      if (app.membership_type === "individual") planPrice = 1500;
+      if (app.membership_type === "sme") planPrice = 5000;
+      if (app.membership_type === "corporate") planPrice = 15000;
+    }
 
     const discountAmount = app.discount_amount || 0;
     const finalAmount = app.final_amount !== undefined && app.final_amount !== null ? app.final_amount : (planPrice - discountAmount);
@@ -415,8 +445,8 @@ export const ApplicationsTab: React.FC = () => {
           <tbody>
             <tr>
               <td>
-                <strong>Annual Chamber Membership Fee - ${tierName} Tier</strong><br>
-                <span style="font-size: 10px; color: #666;">Chamber directory listing, business networking access, events, and resources.</span>
+                <strong>${itemName}</strong><br>
+                <span style="font-size: 10px; color: #666;">${descriptionText}</span>
               </td>
               <td>1 Year (Active from Approval)</td>
               <td class="text-right">PHP ${planPrice.toLocaleString()}.00</td>
