@@ -11,7 +11,8 @@ interface PackageRow {
   id: string;
   name: string;
   description: string;
-  membership_type: "individual" | "sme" | "corporate";
+  membership_type: "individual" | "sme" | "corporate" | null;
+  package_type: "membership_bundle" | "member_passes" | "non_member_passes";
   price: number;
   included_passes: number;
   benefit_type: string;
@@ -47,7 +48,8 @@ export const PackagesTab: React.FC = () => {
   // Form fields
   const [fName, setFName] = useState("");
   const [fDescription, setFDescription] = useState("");
-  const [fMembershipType, setFMembershipType] = useState<"individual" | "sme" | "corporate">("individual");
+  const [fPackageType, setFPackageType] = useState<"membership_bundle" | "member_passes" | "non_member_passes">("membership_bundle");
+  const [fMembershipType, setFMembershipType] = useState<"individual" | "sme" | "corporate" | "none">("individual");
   const [fPrice, setFPrice] = useState<number | "">("");
   const [fIncludedPasses, setFIncludedPasses] = useState<number | "">(4);
   const [fBenefitType, setFBenefitType] = useState("coffee_connections");
@@ -77,6 +79,7 @@ export const PackagesTab: React.FC = () => {
   const resetForm = () => {
     setFName("");
     setFDescription("");
+    setFPackageType("membership_bundle");
     setFMembershipType("individual");
     setFPrice("");
     setFIncludedPasses(4);
@@ -95,7 +98,8 @@ export const PackagesTab: React.FC = () => {
     setEditingPkg(pkg);
     setFName(pkg.name);
     setFDescription(pkg.description);
-    setFMembershipType(pkg.membership_type);
+    setFPackageType(pkg.package_type || "membership_bundle");
+    setFMembershipType(pkg.membership_type || "none");
     setFPrice(pkg.price);
     setFIncludedPasses(pkg.included_passes);
     setFBenefitType(pkg.benefit_type);
@@ -115,7 +119,8 @@ export const PackagesTab: React.FC = () => {
       const payload = {
         name: fName.trim(),
         description: fDescription.trim(),
-        membership_type: fMembershipType,
+        membership_type: fMembershipType === "none" ? null : fMembershipType,
+        package_type: fPackageType,
         price: Number(fPrice),
         included_passes: Number(fIncludedPasses),
         benefit_type: fBenefitType.trim() || "coffee_connections",
@@ -243,9 +248,24 @@ export const PackagesTab: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-heading font-black text-white text-sm leading-tight">{pkg.name}</h3>
-                  <span className={`inline-block text-[10px] font-bold uppercase tracking-wider mt-1 px-2 py-0.5 rounded-full border ${MEMBERSHIP_TYPE_COLORS[pkg.membership_type]}`}>
-                    {MEMBERSHIP_TYPE_LABELS[pkg.membership_type]}
-                  </span>
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    <span className={`inline-block text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                      pkg.membership_type 
+                        ? MEMBERSHIP_TYPE_COLORS[pkg.membership_type] 
+                        : "text-gray-400 bg-white/5 border-white/10"
+                    }`}>
+                      {pkg.membership_type ? MEMBERSHIP_TYPE_LABELS[pkg.membership_type] : "No Linked Tier"}
+                    </span>
+                    <span className={`inline-block text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                      pkg.package_type === "member_passes"
+                        ? "text-teal-400 bg-teal-500/10 border-teal-500/20"
+                        : pkg.package_type === "non_member_passes"
+                        ? "text-pink-400 bg-pink-500/10 border-pink-500/20"
+                        : "text-blue-400 bg-blue-500/10 border-blue-500/20"
+                    }`}>
+                      {(pkg.package_type || "membership_bundle").replace(/_/g, " ")}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -378,22 +398,52 @@ export const PackagesTab: React.FC = () => {
                   />
                 </div>
 
+                {/* Package Type */}
+                <div>
+                  <label className={labelCls}>Package Type *</label>
+                  <div className="relative">
+                    <select
+                      value={fPackageType}
+                      onChange={(e) => {
+                        const val = e.target.value as any;
+                        setFPackageType(val);
+                        if (val === "non_member_passes") {
+                          setFMembershipType("none");
+                        }
+                      }}
+                      className={`${inputCls} appearance-none pr-9 pr-9 cursor-pointer`}
+                    >
+                      <option value="membership_bundle">Membership Bundle (Includes Annual Membership)</option>
+                      <option value="member_passes">Event Passes for Members (Existing Members)</option>
+                      <option value="non_member_passes">Event Passes for Non-Members (Guests)</option>
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A9690] pointer-events-none" />
+                  </div>
+                  <p className="text-[10px] text-[#8A9690] mt-1">Select the operational workflow classification for this package.</p>
+                </div>
+
                 {/* Membership type */}
                 <div>
-                  <label className={labelCls}>Linked Membership Tier *</label>
+                  <label className={labelCls}>Linked Membership Tier</label>
                   <div className="relative">
                     <select
                       value={fMembershipType}
+                      disabled={fPackageType === "non_member_passes"}
                       onChange={(e) => setFMembershipType(e.target.value as any)}
-                      className={`${inputCls} appearance-none pr-9 cursor-pointer`}
+                      className={`${inputCls} appearance-none pr-9 cursor-pointer disabled:opacity-40`}
                     >
+                      <option value="none">None (No Linked Tier)</option>
                       <option value="individual">Small (Individual)</option>
                       <option value="sme">Medium (SME)</option>
                       <option value="corporate">Large (Corporate)</option>
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A9690] pointer-events-none" />
                   </div>
-                  <p className="text-[10px] text-[#8A9690] mt-1">This determines which membership type the member receives when approved.</p>
+                  <p className="text-[10px] text-[#8A9690] mt-1">
+                    {fPackageType === "non_member_passes" 
+                      ? "Not applicable for guest non-member pass packages." 
+                      : "The membership tier assigned/associated with this package."}
+                  </p>
                 </div>
 
                 {/* Price + Passes (side by side) */}

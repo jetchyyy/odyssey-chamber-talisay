@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { 
   Users, CreditCard, CalendarDays, Newspaper, Building2, 
-  TrendingUp, QrCode, Shield, ArrowLeft, RefreshCw, Loader2, UserCheck, Key, Tag, Package, MessageSquareQuote
+  TrendingUp, QrCode, Shield, ArrowLeft, RefreshCw, Loader2, UserCheck, Key, Tag, Package, MessageSquareQuote, Ticket
 } from "lucide-react";
 
 // Tab Subcomponents
@@ -23,6 +23,8 @@ import { PromosTab } from "../components/admin/PromosTab";
 import { PackagesTab } from "../components/admin/PackagesTab";
 import StoriesAdminTab from "../components/admin/StoriesAdminTab";
 import { PrivacyTab } from "../components/admin/PrivacyTab";
+import { PackagePurchasesTab } from "../components/admin/PackagePurchasesTab";
+
 
 export const Admin: React.FC = () => {
   const { user, loading, isAdmin } = useAuth();
@@ -30,28 +32,33 @@ export const Admin: React.FC = () => {
 
   // Active Tab routing state
   const [activeTab, setActiveTab] = useState<
-    "analytics" | "applications" | "users" | "members" | "events" | "pricing" | "packages" | "qrs" | "news" | "directory" | "board" | "password" | "promos" | "stories" | "privacy"
+    "analytics" | "applications" | "users" | "members" | "events" | "pricing" | "packages" | "qrs" | "news" | "directory" | "board" | "password" | "promos" | "stories" | "privacy" | "package-purchases"
   >(()  => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    const validTabs = ["analytics", "applications", "users", "members", "events", "pricing", "packages", "qrs", "news", "directory", "board", "password", "promos", "stories", "privacy"];
+    const validTabs = ["analytics", "applications", "users", "members", "events", "pricing", "packages", "qrs", "news", "directory", "board", "password", "promos", "stories", "privacy", "package-purchases"];
     return (tab && validTabs.includes(tab) ? tab : "analytics") as any;
   });
 
   const [pendingAppsCount, setPendingAppsCount] = useState(0);
+  const [pendingPurchasesCount, setPendingPurchasesCount] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const fetchPendingAppsCount = async () => {
+  const fetchPendingCounts = async () => {
     try {
-      const { count, error } = await supabase
+      const { count: appCount } = await supabase
         .from("membership_applications")
         .select("*", { count: "exact", head: true })
         .eq("status", "pending");
-      if (!error && count !== null) {
-        setPendingAppsCount(count);
-      }
+      if (appCount !== null) setPendingAppsCount(appCount);
+
+      const { count: pkgCount } = await supabase
+        .from("package_purchases")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending");
+      if (pkgCount !== null) setPendingPurchasesCount(pkgCount);
     } catch (err) {
-      console.error("Failed to fetch pending applications count:", err);
+      console.error("Failed to fetch pending counts:", err);
     }
   };
 
@@ -69,7 +76,7 @@ export const Admin: React.FC = () => {
   // Fetch count on mount and tab changes
   useEffect(() => {
     if (user && isAdmin) {
-      fetchPendingAppsCount();
+      fetchPendingCounts();
     }
   }, [user, isAdmin, activeTab, refreshKey]);
 
@@ -98,6 +105,7 @@ export const Admin: React.FC = () => {
           {[
             { id: "analytics", label: "Analytics Overview", icon: TrendingUp },
             { id: "applications", label: "Applications", icon: CreditCard, count: pendingAppsCount },
+            { id: "package-purchases", label: "Package Purchases", icon: Ticket, count: pendingPurchasesCount },
             { id: "users", label: "User Management", icon: Users },
             { id: "members", label: "Member Management", icon: UserCheck },
             { id: "events", label: "Events & Passes", icon: CalendarDays },
@@ -154,6 +162,7 @@ export const Admin: React.FC = () => {
           {[
             { id: "analytics", label: "Analytics", icon: TrendingUp },
             { id: "applications", label: "Applications", icon: CreditCard, count: pendingAppsCount },
+            { id: "package-purchases", label: "Package Purchases", icon: Ticket, count: pendingPurchasesCount },
             { id: "users", label: "Users", icon: Users },
             { id: "members", label: "Members", icon: UserCheck },
             { id: "events", label: "Events", icon: CalendarDays },
@@ -223,6 +232,7 @@ export const Admin: React.FC = () => {
         <div className="w-full">
           {activeTab === "analytics" && <AnalyticsTab key={refreshKey} />}
           {activeTab === "applications" && <ApplicationsTab key={refreshKey} />}
+          {activeTab === "package-purchases" && <PackagePurchasesTab key={refreshKey} />}
           {activeTab === "users" && <UsersTab key={refreshKey} />}
           {activeTab === "members" && <MembersTab key={refreshKey} />}
           {activeTab === "events" && <EventsTab key={refreshKey} />}

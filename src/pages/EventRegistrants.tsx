@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, Search, Loader2, CalendarDays, MapPin, 
   User, Check, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Camera, X, FileDown,
-  Receipt, Tag
+  Receipt, Tag, UserPlus
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { supabase } from "../lib/supabase";
@@ -83,6 +83,114 @@ const EventRegistrants: React.FC = () => {
   } | null>(null);
   const [scannerInstance, setScannerInstance] = useState<Html5Qrcode | null>(null);
   const processingScanRef = useRef(false);
+
+  // Walk-in registration states
+  const [showWalkinModal, setShowWalkinModal] = useState(false);
+  const [walkinType, setWalkinType] = useState<"member" | "guest">("guest");
+  const [activeMembers, setActiveMembers] = useState<any[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [walkinName, setWalkinName] = useState("");
+  const [walkinEmail, setWalkinEmail] = useState("");
+  const [walkinPhone, setWalkinPhone] = useState("");
+  const [walkinPaymentMethod, setWalkinPaymentMethod] = useState<"cash" | "gcash" | "bank_transfer" | "free" | "package" | "other">("cash");
+  const [walkinPaymentStatus, setWalkinPaymentStatus] = useState("paid");
+  const [walkinReference, setWalkinReference] = useState("WALKIN-CASH");
+  const [walkinCheckInImmediately, setWalkinCheckInImmediately] = useState(true);
+  const [walkinError, setWalkinError] = useState<string | null>(null);
+  const [walkinLoading, setWalkinLoading] = useState(false);
+
+  const fetchActiveMembers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, phone")
+        .eq("membership_status", "active")
+        .order("full_name", { ascending: true });
+      if (!error && data) {
+        setActiveMembers(data);
+      }
+    } catch (e) {
+      console.error("Failed to load active members:", e);
+    }
+  };
+
+  const handleWalkinPaymentMethodChange = (method: any) => {
+    setWalkinPaymentMethod(method);
+    if (method === "free") {
+      setWalkinPaymentStatus("free");
+      setWalkinReference("PROMO-FREE");
+    } else {
+      setWalkinPaymentStatus("paid");
+      setWalkinReference(`WALKIN-${method.toUpperCase()}`);
+    }
+  };
+
+  const handleWalkinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (walkinType === "guest" && (!walkinName.trim() || !walkinEmail.trim())) {
+      setWalkinError("Please fill in attendee name and email.");
+      return;
+    }
+    if (walkinType === "member" && !selectedMemberId) {
+      setWalkinError("Please select a registered active member.");
+      return;
+    }
+
+    setWalkinLoading(true);
+    setWalkinError(null);
+
+    try {
+      let targetUserId = null;
+      let targetName = walkinName.trim();
+      let targetEmail = walkinEmail.trim().toLowerCase();
+
+      if (walkinType === "member") {
+        const found = activeMembers.find(m => m.id === selectedMemberId);
+        if (found) {
+          targetUserId = found.id;
+          targetName = found.full_name;
+          targetEmail = found.email.toLowerCase();
+        }
+      }
+
+      const qrPassCode = `EVT-W${Math.floor(100000 + Math.random() * 900000)}`;
+
+      const { error } = await supabase.from("event_registrations").insert({
+        event_id: eventId,
+        user_id: targetUserId,
+        full_name: targetName,
+        email: targetEmail,
+        payment_method: walkinPaymentMethod,
+        payment_reference: walkinReference.trim(),
+        payment_status: walkinPaymentStatus,
+        attendance_status: walkinCheckInImmediately ? "attended" : "registered",
+        qr_code: qrPassCode,
+        final_amount: walkinPaymentMethod === "free" ? 0 : (walkinType === "member" ? (event?.price || 0) : (event?.non_member_price || event?.price || 0))
+      });
+
+      if (error) throw error;
+      toast.success("Walk-in registration successful!");
+      setShowWalkinModal(false);
+      
+      // Reset walk-in form
+      setWalkinName("");
+      setWalkinEmail("");
+      setWalkinPhone("");
+      setSelectedMemberId("");
+      setWalkinReference("WALKIN-CASH");
+      setWalkinPaymentMethod("cash");
+      setWalkinPaymentStatus("paid");
+      setWalkinCheckInImmediately(true);
+
+      // Reload lists
+      setPage(1);
+      fetchRegistrants();
+    } catch (err: any) {
+      setWalkinError(err.message || "Failed to register walk-in.");
+    } finally {
+      setWalkinLoading(false);
+    }
+  };
 
   // Web Audio API beep synthesizer
   const playBeep = (type: "success" | "error") => {
@@ -1050,6 +1158,13 @@ const EventRegistrants: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={() => { setShowWalkinModal(true); fetchActiveMembers(); }}
+            className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-green-950/20"
+          >
+            <UserPlus size={14} />
+            <span>Walk-In Reg</span>
+          </button>
+          <button
             onClick={() => setShowScanner(true)}
             className="flex items-center gap-2 bg-[#10241A] hover:bg-[#163526] text-green-400 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border border-green-500/10 cursor-pointer shadow-lg shadow-green-950/20"
           >
@@ -1533,6 +1648,200 @@ const EventRegistrants: React.FC = () => {
             </motion.div>
           </div>
         )}
+        {/* Walk-in Registration Modal */}
+        <AnimatePresence>
+          {showWalkinModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-[#0A1410] border border-white/10 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden text-slate-300 text-xs flex flex-col max-h-[90vh]"
+              >
+                {/* Header */}
+                <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-heading font-black text-green-400 uppercase tracking-widest">Admin Actions</span>
+                    <h3 className="font-heading font-black text-base text-white mt-0.5">Register Walk-In Attendee</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowWalkinModal(false)}
+                    className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {/* Form Body */}
+                <div className="p-6 overflow-y-auto flex-1 space-y-4 font-sans">
+                  {walkinError && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl font-semibold">
+                      {walkinError}
+                    </div>
+                  )}
+
+                  {/* Toggle walk-in type */}
+                  <div className="flex bg-[#101D17] border border-white/5 p-1 rounded-xl gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setWalkinType("guest")}
+                      className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${
+                        walkinType === "guest" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
+                      }`}
+                    >
+                      Non-Member Guest
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWalkinType("member")}
+                      className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${
+                        walkinType === "member" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
+                      }`}
+                    >
+                      Registered Member
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleWalkinSubmit} className="space-y-4">
+                    {walkinType === "member" ? (
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Select Active Member</label>
+                        <select
+                          required
+                          value={selectedMemberId}
+                          onChange={(e) => setSelectedMemberId(e.target.value)}
+                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer"
+                        >
+                          <option value="">-- Choose active member profile --</option>
+                          {activeMembers.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.full_name} ({m.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Full Name</label>
+                            <input
+                              type="text"
+                              required
+                              value={walkinName}
+                              onChange={(e) => setWalkinName(e.target.value)}
+                              placeholder="e.g. John Doe"
+                              className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Email Address</label>
+                            <input
+                              type="email"
+                              required
+                              value={walkinEmail}
+                              onChange={(e) => setWalkinEmail(e.target.value)}
+                              placeholder="e.g. guest@example.com"
+                              className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Phone Number (Optional)</label>
+                          <input
+                            type="text"
+                            value={walkinPhone}
+                            onChange={(e) => setWalkinPhone(e.target.value)}
+                            placeholder="e.g. +639171234567"
+                            className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment Settings */}
+                    <div className="border-t border-white/5 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Payment Method</label>
+                        <select
+                          value={walkinPaymentMethod}
+                          onChange={(e) => handleWalkinPaymentMethodChange(e.target.value as any)}
+                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer"
+                        >
+                          <option value="cash">Cash Payment</option>
+                          <option value="gcash">GCash</option>
+                          <option value="bank_transfer">Bank Transfer</option>
+                          <option value="package">Package Credit / Pass</option>
+                          <option value="free">Complimentary / Free</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Payment Status</label>
+                        <select
+                          disabled={walkinPaymentMethod === "free"}
+                          value={walkinPaymentStatus}
+                          onChange={(e) => setWalkinPaymentStatus(e.target.value)}
+                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer disabled:opacity-50"
+                        >
+                          <option value="paid">Paid (Received)</option>
+                          <option value="pending">Pending Payment</option>
+                          {walkinPaymentMethod === "free" && <option value="free">Free</option>}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Trace Reference ID</label>
+                        <input
+                          type="text"
+                          required
+                          value={walkinReference}
+                          onChange={(e) => setWalkinReference(e.target.value)}
+                          placeholder="e.g. WALKIN-CASH"
+                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 font-mono"
+                        />
+                      </div>
+
+                      <div className="flex items-center pt-5">
+                        <label className="flex items-center gap-2 text-[#8A9690] cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={walkinCheckInImmediately}
+                            onChange={(e) => setWalkinCheckInImmediately(e.target.checked)}
+                            className="w-4 h-4 accent-green-600 rounded bg-[#101D17] border-white/10"
+                          />
+                          <span>Check-in Immediately</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 justify-end border-t border-white/5 pt-4 mt-6">
+                      <button
+                        type="button"
+                        onClick={() => setShowWalkinModal(false)}
+                        className="px-4 py-2 border border-white/5 hover:bg-white/5 rounded-xl text-gray-400 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={walkinLoading}
+                        className="px-6 py-2 rounded-xl bg-green-700 hover:bg-green-600 text-white font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        {walkinLoading ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={12} />}
+                        Register Attendee
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </AnimatePresence>
     </div>
   );

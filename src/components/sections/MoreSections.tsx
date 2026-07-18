@@ -203,6 +203,21 @@ export const EventsSection: React.FC = () => {
         return;
       }
 
+      // Check email restrictions
+      const regEmail = user ? (profile?.email) : guestEmail.trim();
+      if (data.restricted_to_email) {
+        if (!regEmail) {
+          setPromoError("Please enter your email address first before applying this promo code.");
+          setAppliedPromo(null);
+          return;
+        }
+        if (regEmail.toLowerCase() !== data.restricted_to_email.toLowerCase()) {
+          setPromoError("This promo code is restricted to a different email address.");
+          setAppliedPromo(null);
+          return;
+        }
+      }
+
       setAppliedPromo(data);
       toast.success("Promo code applied!");
     } catch (err: any) {
@@ -375,6 +390,13 @@ export const EventsSection: React.FC = () => {
     if (!regName || !regEmail) {
       setRegError("Please fill in all registration fields.");
       return;
+    }
+
+    if (appliedPromo && (appliedPromo as any).restricted_to_email) {
+      if (regEmail.toLowerCase() !== (appliedPromo as any).restricted_to_email.toLowerCase()) {
+        setRegError("This promo code is restricted to a different email address.");
+        return;
+      }
     }
 
     if (privacyActive && !agreedToPrivacy) {

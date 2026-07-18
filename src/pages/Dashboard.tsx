@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { supabase } from "../lib/supabase";
-import { Loader2, Mail, ArrowRight, CreditCard, CalendarDays, Building2, Newspaper, Key, LogOut, Shield, MessageSquareQuote } from "lucide-react";
+import { Loader2, Mail, ArrowRight, CreditCard, CalendarDays, Building2, Newspaper, Key, LogOut, Shield, MessageSquareQuote, Ticket } from "lucide-react";
 import { uploadImage } from "../lib/storage";
 
 // Sub-components
@@ -17,6 +17,7 @@ import NewsSubmitModal from "../components/dashboard/NewsSubmitModal";
 import PasswordTab from "../components/dashboard/PasswordTab";
 import RenewalModal from "../components/dashboard/RenewalModal";
 import MemberStoriesTab from "../components/dashboard/StoriesTab";
+import { PackagesPurchaseTab } from "../components/dashboard/PackagesPurchaseTab";
 import type { PricingPlan, PaymentQR, RegisteredEvent } from "../components/dashboard/types";
 import { getPlanDisplayName, BUSINESS_CATEGORIES } from "../components/dashboard/types";
 
@@ -73,7 +74,7 @@ const Dashboard: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [registeredEvents, setRegisteredEvents] = useState<RegisteredEvent[]>([]);
-  const [activeTab, setActiveTab] = useState<"card" | "events" | "directory" | "news" | "stories" | "settings">("card");
+  const [activeTab, setActiveTab] = useState<"card" | "events" | "directory" | "news" | "stories" | "settings" | "packages">("card");
   const [dbPackages, setDbPackages] = useState<any[]>([]);
   const [myCredits, setMyCredits] = useState<any[]>([]);
 
@@ -913,6 +914,7 @@ const Dashboard: React.FC = () => {
               {([
                 { id: "card", icon: <CreditCard size={16} />, label: "Digital Member Card" },
                 { id: "events", icon: <CalendarDays size={16} />, label: `Registered Events (${registeredEvents.length})` },
+                { id: "packages", icon: <Ticket size={16} />, label: "Buy Event Passes" },
                 { id: "directory", icon: <Building2 size={16} />, label: "Business Directory Profile" },
                 { id: "news", icon: <Newspaper size={16} />, label: `News Submissions (${myNews.length})` },
                 { id: "stories", icon: <MessageSquareQuote size={16} />, label: "My Member Stories" },
@@ -973,6 +975,16 @@ const Dashboard: React.FC = () => {
                 )}
 
                 {activeTab === "stories" && <MemberStoriesTab key="stories" />}
+
+                {activeTab === "packages" && (
+                  <PackagesPurchaseTab
+                    key="packages"
+                    packages={dbPackages.filter((p) => p.package_type === "member_passes")}
+                    paymentMethods={paymentMethods}
+                    user={user}
+                    profile={profile}
+                  />
+                )}
 
                 {activeTab === "settings" && (
                   <PasswordTab
