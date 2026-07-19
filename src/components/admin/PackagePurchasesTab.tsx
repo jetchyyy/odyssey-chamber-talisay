@@ -77,7 +77,7 @@ export const PackagePurchasesTab: React.FC = () => {
   }, []);
 
   const handleApprove = async (id: string) => {
-    const yes = await confirm("Approve Purchase", "Are you sure you want to approve this package purchase? This will active the passes.");
+    const yes = window.confirm("Approve Purchase\n\nAre you sure you want to approve this package purchase? This will activate the passes.");
     if (!yes) return;
 
     setActionLoading(true);
@@ -98,7 +98,7 @@ export const PackagePurchasesTab: React.FC = () => {
   };
 
   const handleReject = async (id: string) => {
-    const yes = await confirm("Reject Purchase", "Are you sure you want to reject this package purchase request?");
+    const yes = window.confirm("Reject Purchase\n\nAre you sure you want to reject this package purchase request?");
     if (!yes) return;
 
     setActionLoading(true);

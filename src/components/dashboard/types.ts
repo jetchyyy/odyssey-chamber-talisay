@@ -16,6 +16,7 @@ export interface PaymentQR {
   description: string;
   payment_instructions: string;
   qr_code_url: string;
+  account_number?: string;
 }
 
 export interface RegisteredEvent {
