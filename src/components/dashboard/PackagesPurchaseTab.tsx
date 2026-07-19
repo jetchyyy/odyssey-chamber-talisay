@@ -19,7 +19,7 @@ interface PackageRow {
 interface PaymentQR {
   id: string;
   name: string;
-  account_number: string;
+  account_number?: string;
   qr_code_url: string;
 }
 
