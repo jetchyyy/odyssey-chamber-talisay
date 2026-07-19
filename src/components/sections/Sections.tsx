@@ -4,7 +4,7 @@ import type { Variants } from "framer-motion";
 import {
   Lightbulb, Shield, Target, Users, TrendingUp, Building2,
   Landmark, Handshake, Megaphone, Globe, CheckCircle2, ArrowUpRight,
-  Ticket, Loader2, X, Copy, Check
+  Ticket, Loader2, X, Copy, Check, Download
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { supabase } from "../../lib/supabase";
@@ -410,6 +410,23 @@ export const MembershipSection: React.FC = () => {
     }
   };
 
+  const handleDownloadImage = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      window.open(url, "_blank");
+    }
+  };
+
   const handleGuestCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!guestName.trim() || !guestEmail.trim() || !guestRef.trim() || !guestProofFile) {
@@ -508,7 +525,7 @@ export const MembershipSection: React.FC = () => {
     } else if (isMemberOnly) {
       if (currentUser) {
         if (currentProfile?.membership_status === "active") {
-          ctaLink = "/dashboard";
+          ctaLink = "/dashboard?tab=packages";
           ctaLabel = "Buy in Dashboard";
         } else {
           ctaOnClick = () => alert("Your account membership status must be 'active' to purchase member-only packages. Check your dashboard status.");
@@ -858,7 +875,7 @@ export const MembershipSection: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto"
           >
             <motion.div
               initial={{ scale: 0.95, y: 20 }}
@@ -946,24 +963,34 @@ export const MembershipSection: React.FC = () => {
                       <h4 className="font-bold text-[#0D1A14] text-[11px] uppercase tracking-wider">2. Payment Verification</h4>
                       <p className="text-[10px] text-gray-500">Scan QR to pay <strong>PHP {Number(selectedGuestPkg.price).toLocaleString()}.00</strong></p>
 
-                      {qrMethods.length > 0 ? (
+                       {qrMethods.length > 0 ? (
                         <div className="grid grid-cols-2 gap-3">
                           {qrMethods.map((qr) => (
-                            <button
+                            <div
                               key={qr.id}
-                              type="button"
                               onClick={() => setGuestPaymentMethod(qr.name.toLowerCase().includes("gcash") ? "gcash" : "bank_transfer")}
-                              className={`p-3 border rounded-2xl flex flex-col items-center gap-1.5 cursor-pointer text-center ${
+                              className={`p-3 border rounded-2xl flex flex-col items-center gap-1.5 cursor-pointer text-center transition-all ${
                                 (guestPaymentMethod === "gcash" && qr.name.toLowerCase().includes("gcash")) ||
                                 (guestPaymentMethod === "bank_transfer" && !qr.name.toLowerCase().includes("gcash"))
                                   ? "border-green-700 bg-green-50/20 text-[#0D1A14]"
                                   : "border-gray-200 hover:bg-gray-50"
                               }`}
                             >
-                              <img src={qr.qr_image_url} alt={qr.name} className="h-20 w-auto object-contain bg-white p-1 rounded" />
+                              <img src={qr.qr_code_url} alt={qr.name} className="h-32 w-auto object-contain bg-white p-1 rounded" />
                               <div className="font-bold text-[10px]">{qr.name}</div>
-                              <div className="text-[8px] text-gray-500 font-mono">{qr.account_number}</div>
-                            </button>
+                              <div className="text-[8px] text-gray-500 font-mono mb-1">{qr.account_number}</div>
+                              
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownloadImage(qr.qr_code_url, `${qr.name}_QR.png`);
+                                }}
+                                className="px-2.5 py-1 bg-white hover:bg-gray-100 text-[#0D1A14] border border-gray-200 rounded-lg text-[9px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs mt-auto"
+                              >
+                                <Download size={10} /> Download QR
+                              </button>
+                            </div>
                           ))}
                         </div>
                       ) : (

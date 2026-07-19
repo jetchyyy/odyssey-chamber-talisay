@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { supabase } from "../lib/supabase";
@@ -27,6 +27,7 @@ const Dashboard: React.FC = () => {
   const { user, profile, loading, logout, refetchProfile, isAdmin } = useAuth();
   const { toast } = useNotification();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // ── Application workflow states ──────────────────────────────────────────
   const [plans, setPlans] = useState<PricingPlan[]>([]);
@@ -279,7 +280,6 @@ const Dashboard: React.FC = () => {
       const { data: plansData } = await supabase.from("membership_pricing").select("*").eq("is_active", true);
       if (plansData) setPlans(plansData);
 
-      // 1b. Packages
       const { data: packagesData } = await supabase.from("membership_packages").select("*").eq("is_active", true);
       const mappedPackages = packagesData
         ? packagesData.map((pkg) => ({
@@ -291,6 +291,10 @@ const Dashboard: React.FC = () => {
             description: pkg.description,
             isPackage: true,
             membership_type: pkg.membership_type,
+            package_type: pkg.package_type,
+            included_passes: pkg.included_passes,
+            benefit_type: pkg.benefit_type,
+            terms_and_conditions: pkg.terms_and_conditions,
             benefits: [
               `${pkg.membership_type === "individual" ? "Small (Individual)" : pkg.membership_type === "sme" ? "Medium (SME)" : "Large (Corporate)"} Membership`,
               `${pkg.included_passes} passes included (${pkg.benefit_type.replace(/_/g, " ")})`,
@@ -398,6 +402,15 @@ const Dashboard: React.FC = () => {
     };
     loadData();
   }, [user, profile]);
+
+  // Listen to tab query parameter changes to switch tab active views
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get("tab");
+    if (tabParam === "packages") {
+      setActiveTab("packages");
+    }
+  }, [location]);
 
   // ── Password strength helpers ────────────────────────────────────────────
   const hasMinLength = newPassword.length >= 8;
@@ -906,6 +919,39 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           )}
+          {/* Active Passes Remaining Banner */}
+          {(() => {
+            const totalRemainingPasses = myCredits
+              .filter(c => c.is_active && (!c.expires_at || new Date(c.expires_at) > new Date()))
+              .reduce((sum, c) => sum + c.remaining_credits, 0);
+            return (
+              <div className="p-5 rounded-[2rem] border flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm text-xs font-semibold bg-[#EDF9F4] border-green-200 text-green-800">
+                <div className="flex items-center gap-3">
+                  <span className="w-10 h-10 rounded-2xl flex items-center justify-center bg-green-700 text-white flex-shrink-0">
+                    <Ticket size={18} />
+                  </span>
+                  <div className="text-left">
+                    <div className="font-heading font-black text-sm text-[#0D1A14]">
+                      You have {totalRemainingPasses} Event Passes Left
+                    </div>
+                    <div className="opacity-95 font-normal mt-0.5 max-w-2xl text-gray-600">
+                      {totalRemainingPasses > 0 
+                        ? "You can use these passes to register for any upcoming eligible Chamber events for free. Click 'Events' in the main menu to see schedules."
+                        : "Purchase a pass package to register for upcoming events at discounted rates."}
+                    </div>
+                  </div>
+                </div>
+                {totalRemainingPasses === 0 && (
+                  <button
+                    onClick={() => setActiveTab("packages")}
+                    className="px-4.5 py-2.5 rounded-xl bg-green-700 hover:bg-green-600 text-white font-bold cursor-pointer transition-colors shadow-sm text-xs flex-shrink-0"
+                  >
+                    Buy Event Passes
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Sidebar nav + Main content grid */}
           <div className="grid lg:grid-cols-[280px_1fr] gap-8 items-start">

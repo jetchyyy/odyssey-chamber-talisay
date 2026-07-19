@@ -3,7 +3,7 @@ import { supabase } from "../../lib/supabase";
 import { uploadImage } from "../../lib/storage";
 import { useNotification } from "../../context/NotificationContext";
 import {
-  Ticket, CheckCircle2, Loader2, Eye, Receipt, ArrowUpRight, ShieldAlert, Sparkles, Send
+  Ticket, CheckCircle2, Loader2, Eye, Receipt, ArrowUpRight, ShieldAlert, Sparkles, Send, Download
 } from "lucide-react";
 
 interface PackageRow {
@@ -20,7 +20,7 @@ interface PaymentQR {
   id: string;
   name: string;
   account_number: string;
-  qr_image_url: string;
+  qr_code_url: string;
 }
 
 interface PackagesPurchaseTabProps {
@@ -59,6 +59,23 @@ export const PackagesPurchaseTab: React.FC<PackagesPurchaseTabProps> = ({
         setPaymentProofPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDownloadImage = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      window.open(url, "_blank");
     }
   };
 
@@ -188,7 +205,7 @@ export const PackagesPurchaseTab: React.FC<PackagesPurchaseTabProps> = ({
               {selectedPaymentQR ? (
                 <div className="flex flex-col sm:flex-row items-center gap-5 pt-2">
                   <img
-                    src={selectedPaymentQR.qr_image_url}
+                    src={selectedPaymentQR.qr_code_url}
                     alt={selectedPaymentQR.name}
                     className="h-28 w-auto object-contain bg-white p-1 rounded-xl border border-gray-200"
                   />
@@ -201,6 +218,13 @@ export const PackagesPurchaseTab: React.FC<PackagesPurchaseTabProps> = ({
                       <span className="text-gray-400 block text-[9px] font-bold uppercase tracking-wider">Account Number</span>
                       <strong className="text-slate-800 font-bold font-mono">{selectedPaymentQR.account_number}</strong>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadImage(selectedPaymentQR.qr_code_url, `${selectedPaymentQR.name}_QR.png`)}
+                      className="px-2.5 py-1 bg-white hover:bg-gray-100 text-[#0D1A14] border border-gray-200 rounded-lg text-[9px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm mt-2 w-max"
+                    >
+                      <Download size={10} /> Download QR
+                    </button>
                   </div>
                 </div>
               ) : (
