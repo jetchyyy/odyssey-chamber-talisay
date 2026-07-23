@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  ArrowLeft, Search, Loader2, CalendarDays, MapPin, 
+import {
+  ArrowLeft, Search, Loader2, CalendarDays, MapPin,
   User, Check, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Camera, X, FileDown,
   Receipt, Tag, UserPlus
 } from "lucide-react";
@@ -171,7 +171,7 @@ const EventRegistrants: React.FC = () => {
       if (error) throw error;
       toast.success("Walk-in registration successful!");
       setShowWalkinModal(false);
-      
+
       // Reset walk-in form
       setWalkinName("");
       setWalkinEmail("");
@@ -198,7 +198,7 @@ const EventRegistrants: React.FC = () => {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) return;
       const ctx = new AudioContextClass();
-      
+
       if (type === "success") {
         // High, pleasant double chirp
         const osc1 = ctx.createOscillator();
@@ -497,7 +497,7 @@ const EventRegistrants: React.FC = () => {
         .eq("id", regId);
 
       if (error) throw error;
-      
+
       // Update local state directly to be fast and reactive
       setRegistrants(prev => prev.map(r => r.id === regId ? { ...r, attendance_status: nextStatus } : r));
       setCheckedInCount(prev => nextStatus === "attended" ? prev + 1 : Math.max(0, prev - 1));
@@ -519,16 +519,16 @@ const EventRegistrants: React.FC = () => {
         .eq("id", regId);
 
       if (error) throw error;
-      
+
       // Update local state directly
       setRegistrants(prev => prev.map(r => r.id === regId ? { ...r, payment_status: newStatus } : r));
-      
+
       // Update selected registration status if modal is open
       if (selectedReg && selectedReg.id === regId) {
         setSelectedReg(prev => prev ? { ...prev, payment_status: newStatus } : null);
         setModalPaymentStatus(newStatus);
       }
-      
+
       toast.success(`Payment status updated to ${newStatus}`);
     } catch (err: any) {
       toast.error("Failed to update payment status: " + err.message);
@@ -548,26 +548,26 @@ const EventRegistrants: React.FC = () => {
     try {
       const { error } = await supabase
         .from("event_registrations")
-        .update({ 
+        .update({
           invoice_number: formattedInvoice || null,
           payment_status: payStatus
         })
         .eq("id", regId);
 
       if (error) throw error;
-      
+
       // Update local state directly
-      setRegistrants(prev => prev.map(r => 
-        r.id === regId 
-          ? { ...r, invoice_number: formattedInvoice || null, payment_status: payStatus } 
+      setRegistrants(prev => prev.map(r =>
+        r.id === regId
+          ? { ...r, invoice_number: formattedInvoice || null, payment_status: payStatus }
           : r
       ));
-      
+
       // If selected registration is open, update its state too
       if (selectedReg && selectedReg.id === regId) {
         setSelectedReg(prev => prev ? { ...prev, invoice_number: formattedInvoice || null, payment_status: payStatus } : null);
       }
-      
+
       toast.success("Invoice and payment details updated successfully!");
       setShowInvoiceModal(false);
     } catch (err: any) {
@@ -580,25 +580,25 @@ const EventRegistrants: React.FC = () => {
   // Print single registration invoice/receipt
   const handlePrintSingleInvoice = (reg: RegistrationData) => {
     if (!event) return;
-    
+
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       toast.error("Pop-up blocker is preventing invoice generation. Please allow pop-ups.");
       return;
     }
-    
+
     // Determine user type (member vs non-member)
     const isMember = reg.profiles?.membership_status === "active" || reg.profiles?.role === "admin";
     const originalPrice = isMember ? event.price : (event.non_member_price || 0);
     const discountAmount = reg.discount_amount || 0;
     const finalAmount = reg.final_amount !== undefined && reg.final_amount !== null ? reg.final_amount : (originalPrice - discountAmount);
-    
+
     const ticketPrice = reg.payment_status === "free" ? 0 : originalPrice;
-    
+
     // Format payment status text
     const displayStatus = reg.payment_status.toUpperCase();
     const invoiceDisplayNumber = reg.invoice_number ? reg.invoice_number : "PENDING MATCH";
-    
+
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -776,19 +776,18 @@ const EventRegistrants: React.FC = () => {
       </head>
       <body>
         <div class="invoice-box">
-          ${
-            reg.payment_status === "paid" || reg.payment_status === "free"
-              ? `<div class="status-stamp">PAID</div>`
-              : `<div class="status-stamp unpaid">PENDING</div>`
-          }
+          ${reg.payment_status === "paid" || reg.payment_status === "free"
+        ? `<div class="status-stamp">PAID</div>`
+        : `<div class="status-stamp unpaid">PENDING</div>`
+      }
 
           <div class="header">
             <div class="logo-area">
-              <h1>Talisay Chamber of Commerce</h1>
-              <p>Trade, Industry & Livelihood development</p>
+              <h1>CITY OF TALISAY CHAMBER OF COMMERCE TRADE AND INDUSTRY INC</h1>
+              <p>Paseo Ricardo Commercial Center, Nonoc, Rafael Rabaya Rd City of Talisay, Cebu, Philippines</p>
             </div>
             <div class="invoice-details">
-              <h2>Invoice / Official Receipt</h2>
+              <h2>Invoice</h2>
               <p>Invoice No: <span>${invoiceDisplayNumber}</span></p>
               <p>Date: ${new Date(reg.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
             </div>
@@ -805,7 +804,7 @@ const EventRegistrants: React.FC = () => {
               <div class="section-title">Chamber Information</div>
               <p><strong>Talisay Chamber of Commerce & Industry Inc.</strong></p>
               <p>Poblacion, Talisay City, Cebu, Philippines</p>
-              <p>Email: billing@talisaychamber.org</p>
+              <p>Email: talisaychamber@gmail.com</p>
             </div>
           </div>
 
@@ -844,14 +843,13 @@ const EventRegistrants: React.FC = () => {
               <span style="color: #6b7280;">Payment Method:</span>
               <span style="text-transform: capitalize;">${reg.payment_method.replace("_", " ")}</span>
             </div>
-            ${
-              reg.payment_reference
-                ? `<div class="amount-row">
+            ${reg.payment_reference
+        ? `<div class="amount-row">
                     <span style="color: #6b7280;">Reference:</span>
                     <span style="font-family: monospace; font-size: 11px;">${reg.payment_reference}</span>
                   </div>`
-                : ""
-            }
+        : ""
+      }
             <div class="amount-row total">
               <span>Total Paid:</span>
               <span>PHP ${reg.payment_status === 'free' ? '0' : finalAmount.toLocaleString()}</span>
@@ -880,7 +878,7 @@ const EventRegistrants: React.FC = () => {
       </body>
       </html>
     `;
-    
+
     printWindow.document.open();
     printWindow.document.write(htmlContent);
     printWindow.document.close();
@@ -920,9 +918,8 @@ const EventRegistrants: React.FC = () => {
             <div>${reg.payment_method.replace("_", " ")}</div>
             ${reg.payment_reference ? `<div style="font-size: 9px; color: #718096; font-family: monospace; margin-top: 2px;">Ref: ${reg.payment_reference}</div>` : ""}
           </td>
-          <td style="text-transform: capitalize; font-weight: bold; color: ${
-            reg.payment_status === "paid" || reg.payment_status === "free" ? "#166534" : "#b45309"
-          }">${reg.payment_status}</td>
+          <td style="text-transform: capitalize; font-weight: bold; color: ${reg.payment_status === "paid" || reg.payment_status === "free" ? "#166534" : "#b45309"
+        }">${reg.payment_status}</td>
           <td style="text-transform: capitalize;">${reg.attendance_status}</td>
           <td style="width: 150px;" class="signature-col"></td>
         </tr>
@@ -1206,7 +1203,7 @@ const EventRegistrants: React.FC = () => {
                 <span className="flex items-center gap-2"><User size={14} className="text-green-500" /> Speaker: {event.speaker}</span>
               </div>
             </div>
-            
+
             {/* Quick Stats Grid */}
             <div className="flex gap-4 z-10">
               <div className="px-5 py-4 rounded-2xl bg-white/[0.02] border border-white/5 text-center min-w-[100px]">
@@ -1312,13 +1309,12 @@ const EventRegistrants: React.FC = () => {
                           value={reg.payment_status}
                           disabled={actionLoading}
                           onChange={(e) => handleUpdatePaymentStatus(reg.id, e.target.value)}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-bold border outline-none cursor-pointer bg-[#101D17] ${
-                            reg.payment_status === "paid" || reg.payment_status === "free"
-                              ? "border-green-500/30 text-green-400"
-                              : reg.payment_status === "rejected"
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold border outline-none cursor-pointer bg-[#101D17] ${reg.payment_status === "paid" || reg.payment_status === "free"
+                            ? "border-green-500/30 text-green-400"
+                            : reg.payment_status === "rejected"
                               ? "border-red-500/30 text-red-400"
                               : "border-amber-500/30 text-amber-400"
-                          }`}
+                            }`}
                         >
                           <option value="pending" className="bg-[#0E1B15] text-white">Pending</option>
                           <option value="paid" className="bg-[#0E1B15] text-white">Paid</option>
@@ -1327,11 +1323,10 @@ const EventRegistrants: React.FC = () => {
                         </select>
                       </td>
                       <td className="py-4 px-4 capitalize">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold ${
-                          reg.attendance_status === "attended"
-                            ? "bg-green-500/10 text-green-400 border border-green-500/25"
-                            : "bg-white/5 text-gray-400 border border-white/10"
-                        }`}>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold ${reg.attendance_status === "attended"
+                          ? "bg-green-500/10 text-green-400 border border-green-500/25"
+                          : "bg-white/5 text-gray-400 border border-white/10"
+                          }`}>
                           {reg.attendance_status}
                         </span>
                       </td>
@@ -1352,11 +1347,10 @@ const EventRegistrants: React.FC = () => {
                           <button
                             onClick={() => handleToggleAttendance(reg.id, reg.attendance_status)}
                             disabled={actionLoading}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-colors ${
-                              reg.attendance_status === "attended"
-                                ? "bg-green-800 hover:bg-green-700 text-white"
-                                : "bg-[#10241A] hover:bg-[#163526] text-green-400"
-                            }`}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-colors ${reg.attendance_status === "attended"
+                              ? "bg-green-800 hover:bg-green-700 text-white"
+                              : "bg-[#10241A] hover:bg-[#163526] text-green-400"
+                              }`}
                           >
                             {reg.attendance_status === "attended" ? "Attended" : "Mark Attended"}
                           </button>
@@ -1387,18 +1381,17 @@ const EventRegistrants: React.FC = () => {
                   >
                     <ChevronLeft size={14} />
                   </button>
-                  
+
                   {Array.from({ length: totalPages }).map((_, index) => {
                     const pageNumber = index + 1;
                     return (
                       <button
                         key={pageNumber}
                         onClick={() => setPage(pageNumber)}
-                        className={`w-8 h-8 rounded-lg border transition-colors cursor-pointer font-bold ${
-                          page === pageNumber
-                            ? "bg-green-700 border-green-600 text-white"
-                            : "border-white/10 hover:bg-white/5 text-gray-300"
-                        }`}
+                        className={`w-8 h-8 rounded-lg border transition-colors cursor-pointer font-bold ${page === pageNumber
+                          ? "bg-green-700 border-green-600 text-white"
+                          : "border-white/10 hover:bg-white/5 text-gray-300"
+                          }`}
                       >
                         {pageNumber}
                       </button>
@@ -1422,13 +1415,13 @@ const EventRegistrants: React.FC = () => {
       {/* Scanner Modal */}
       <AnimatePresence>
         {showScanner && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
@@ -1451,7 +1444,7 @@ const EventRegistrants: React.FC = () => {
               {/* Scanner View Area */}
               <div className="p-6 flex flex-col items-center justify-center bg-[#08110D]">
                 <div className="relative w-72 h-72 rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex items-center justify-center">
-                  
+
                   {/* html5-qrcode targets this ID */}
                   <div id="qr-reader" className="w-full h-full [&_video]:object-cover" />
 
@@ -1479,11 +1472,10 @@ const EventRegistrants: React.FC = () => {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className={`border-t ${
-                      scanResult.success 
-                        ? "bg-green-950/90 border-green-500/30 text-green-200" 
-                        : "bg-red-950/90 border-red-500/30 text-red-200"
-                    } p-5 overflow-hidden`}
+                    className={`border-t ${scanResult.success
+                      ? "bg-green-950/90 border-green-500/30 text-green-200"
+                      : "bg-red-950/90 border-red-500/30 text-red-200"
+                      } p-5 overflow-hidden`}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`p-1.5 rounded-lg shrink-0 ${scanResult.success ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
@@ -1686,18 +1678,16 @@ const EventRegistrants: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setWalkinType("guest")}
-                      className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${
-                        walkinType === "guest" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
-                      }`}
+                      className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${walkinType === "guest" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
+                        }`}
                     >
                       Non-Member Guest
                     </button>
                     <button
                       type="button"
                       onClick={() => setWalkinType("member")}
-                      className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${
-                        walkinType === "member" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
-                      }`}
+                      className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${walkinType === "member" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
+                        }`}
                     >
                       Registered Member
                     </button>
