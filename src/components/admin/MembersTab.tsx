@@ -344,6 +344,7 @@ export const MembersTab: React.FC = () => {
         membership_type: newMemberCategory || null, 
         company_name: newMemberCompany.trim() || null,
         phone: newMemberPhone.trim() || null,
+        business_address: newMemberAddress.trim() || null,
         expires_at: editMemberExpiresAt ? new Date(editMemberExpiresAt).toISOString() : null,
       };
 
@@ -405,6 +406,7 @@ export const MembersTab: React.FC = () => {
     setNewMemberName(member.full_name || "");
     setNewMemberCompany(member.company_name || "");
     setNewMemberPhone(member.phone || "");
+    setNewMemberAddress(member.business_address || "");
     setNewMemberCategory(member.membership_type || "individual"); // stores plan when editing
     setNewMemberPlan(member.membership_status || "active"); // stores status when editing
     
@@ -972,6 +974,17 @@ export const MembersTab: React.FC = () => {
                       className="w-full px-3 py-2 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none focus:border-green-500 transition-colors"
                     />
                   </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-[#8A9690] mb-1">Business Address</label>
+                  <input
+                    type="text"
+                    value={newMemberAddress}
+                    onChange={(e) => setNewMemberAddress(e.target.value)}
+                    placeholder="e.g. 123 Main St, Talisay City"
+                    className="w-full px-3 py-2 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none focus:border-green-500 transition-colors"
+                  />
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-4">

@@ -155,17 +155,17 @@ const EventRegistrants: React.FC = () => {
 
       const qrPassCode = `EVT-W${Math.floor(100000 + Math.random() * 900000)}`;
 
-      const { error } = await supabase.from("event_registrations").insert({
-        event_id: eventId,
-        user_id: targetUserId,
-        full_name: targetName,
-        email: targetEmail,
-        payment_method: walkinPaymentMethod,
-        payment_reference: walkinReference.trim(),
-        payment_status: walkinPaymentStatus,
-        attendance_status: walkinCheckInImmediately ? "attended" : "registered",
-        qr_code: qrPassCode,
-        final_amount: walkinPaymentMethod === "free" ? 0 : (walkinType === "member" ? (event?.price || 0) : (event?.non_member_price || event?.price || 0))
+      const { error } = await supabase.rpc("admin_walkin_register", {
+        p_event_id: eventId,
+        p_user_id: targetUserId,
+        p_full_name: targetName,
+        p_email: targetEmail,
+        p_payment_method: walkinPaymentMethod,
+        p_payment_reference: walkinReference.trim(),
+        p_payment_status: walkinPaymentStatus,
+        p_attendance_status: walkinCheckInImmediately ? "attended" : "registered",
+        p_qr_code: qrPassCode,
+        p_final_amount: walkinPaymentMethod === "free" ? 0 : (walkinType === "member" ? (event?.price || 0) : (event?.non_member_price || event?.price || 0))
       });
 
       if (error) throw error;

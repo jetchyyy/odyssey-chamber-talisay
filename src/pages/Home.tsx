@@ -55,6 +55,7 @@ const AVATAR_GRADIENTS = [
 
 const TestimonialsSection: React.FC = () => {
   const [stories, setStories] = React.useState<any[]>([]);
+  const [selectedStory, setSelectedStory] = React.useState<any | null>(null);
 
   React.useEffect(() => {
     const fetchStories = async () => {
@@ -79,6 +80,10 @@ const TestimonialsSection: React.FC = () => {
     const initials = s.full_name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
     const gradient = AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length];
     const subtitle = [s.role_title, s.business_name].filter(Boolean).join(", ");
+    
+    // Determine if we need a Read More button
+    const isLongText = s.story_text.length > 250;
+    
     return (
       <motion.div
         key={s.id}
@@ -89,7 +94,19 @@ const TestimonialsSection: React.FC = () => {
         className="rounded-[2rem] p-7 border border-white/10 bg-white/[0.035] hover:bg-white/[0.07] spring cursor-default flex flex-col shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
       >
         <div className="text-4xl font-serif text-green-900/60 leading-none mb-4 select-none">"</div>
-        <p className="text-slate-300 leading-[1.8] mb-6 text-[15px] flex-1">{s.story_text}</p>
+        <div className="flex-1 mb-6">
+          <p className={`text-slate-300 leading-[1.8] text-[15px] ${isLongText ? "line-clamp-6" : ""}`}>
+            {s.story_text}
+          </p>
+          {isLongText && (
+            <button
+              onClick={() => setSelectedStory(s)}
+              className="mt-3 text-sm text-green-400 hover:text-green-300 font-medium transition-colors focus:outline-none"
+            >
+              Read more
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-xs font-heading font-bold flex-shrink-0`}>
             {initials}
@@ -104,29 +121,82 @@ const TestimonialsSection: React.FC = () => {
   };
 
   return (
-    <section className="py-32 bg-[#0D1A14] relative overflow-hidden" aria-label="Member testimonials">
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-green-800/40 to-transparent" aria-hidden="true" />
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-green-800/40 to-transparent" aria-hidden="true" />
-      <div className="absolute top-1/2 left-1/4 w-96 h-96 bg-green-900/20 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
+    <>
+      <section className="py-32 bg-[#0D1A14] relative overflow-hidden" aria-label="Member testimonials">
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-green-800/40 to-transparent" aria-hidden="true" />
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-green-800/40 to-transparent" aria-hidden="true" />
+        <div className="absolute top-1/2 left-1/4 w-96 h-96 bg-green-900/20 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
 
-      <div className="container mx-auto px-4 md:px-10 max-w-7xl mb-16 text-center">
-        <span className="label-pill !bg-green-900/50 !text-green-300 !border-green-700/40 mb-5 inline-flex">Member Stories</span>
-        <h2 className="text-[clamp(1.875rem,3.5vw,3rem)] font-heading font-black text-white">
-          What our members say
-        </h2>
-      </div>
-
-      <div className="container mx-auto px-4 md:px-10 max-w-7xl space-y-4">
-        <div className={`grid gap-4 ${row1.length === 1 ? "max-w-md mx-auto" : row1.length === 2 ? "md:grid-cols-2 max-w-2xl mx-auto" : "md:grid-cols-2 lg:grid-cols-3"}`}>
-          {row1.map((s, i) => renderCard(s, i))}
+        <div className="container mx-auto px-4 md:px-10 max-w-7xl mb-16 text-center">
+          <span className="label-pill !bg-green-900/50 !text-green-300 !border-green-700/40 mb-5 inline-flex">Member Stories</span>
+          <h2 className="text-[clamp(1.875rem,3.5vw,3rem)] font-heading font-black text-white">
+            What our members say
+          </h2>
         </div>
-        {row2.length > 0 && (
-          <div className="grid md:grid-cols-2 gap-4 max-w-[calc(66.66%+0.5rem)] mx-auto lg:max-w-[66.66%]">
-            {row2.map((s, i) => renderCard(s, i, 3))}
+
+        <div className="container mx-auto px-4 md:px-10 max-w-7xl space-y-4">
+          <div className={`grid gap-4 ${row1.length === 1 ? "max-w-md mx-auto" : row1.length === 2 ? "md:grid-cols-2 max-w-2xl mx-auto" : "md:grid-cols-2 lg:grid-cols-3"}`}>
+            {row1.map((s, i) => renderCard(s, i))}
+          </div>
+          {row2.length > 0 && (
+            <div className="grid md:grid-cols-2 gap-4 max-w-[calc(66.66%+0.5rem)] mx-auto lg:max-w-[66.66%]">
+              {row2.map((s, i) => renderCard(s, i, 3))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Read More Modal */}
+      <AnimatePresence>
+        {selectedStory && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setSelectedStory(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-[#0D1A14] border border-white/10 rounded-[2rem] p-8 md:p-10 shadow-2xl flex flex-col max-h-[90vh]"
+            >
+              <button
+                onClick={() => setSelectedStory(null)}
+                className="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors p-2 bg-white/5 hover:bg-white/10 rounded-full"
+                aria-label="Close"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+              
+              <div className="text-6xl font-serif text-green-900/60 leading-none mb-6">"</div>
+              
+              <div className="overflow-y-auto pr-4 -mr-4 mb-8 custom-scrollbar">
+                <p className="text-slate-300 leading-[1.8] text-[16px] md:text-[18px] font-medium whitespace-pre-wrap">
+                  {selectedStory.story_text}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-4 mt-auto pt-6 border-t border-white/10">
+                <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${AVATAR_GRADIENTS[0]} flex items-center justify-center text-white text-sm font-heading font-bold flex-shrink-0`}>
+                  {selectedStory.full_name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()}
+                </div>
+                <div>
+                  <div className="font-heading font-semibold text-white text-base">{selectedStory.full_name}</div>
+                  {[selectedStory.role_title, selectedStory.business_name].filter(Boolean).length > 0 && (
+                    <div className="text-sm text-slate-500 mt-0.5">
+                      {[selectedStory.role_title, selectedStory.business_name].filter(Boolean).join(", ")}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
           </div>
         )}
-      </div>
-    </section>
+      </AnimatePresence>
+    </>
   );
 };
 

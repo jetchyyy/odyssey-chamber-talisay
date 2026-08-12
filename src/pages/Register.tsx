@@ -81,6 +81,7 @@ const Register: React.FC = () => {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [businessAddress, setBusinessAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -125,8 +126,10 @@ const Register: React.FC = () => {
           setDataSharingScope(privacyData[0].data_sharing_scope || "none");
         }
 
-        const finalPlans = plansData && plansData.length > 0 ? plansData : DEFAULT_PLANS;
-        const finalPkgs = packagesData && packagesData.length > 0 ? packagesData : DEFAULT_PACKAGES;
+        // Only fallback to defaults if data is null (e.g., table doesn't exist or error). 
+        // If data is an empty array (meaning no active packages/plans), we should respect that and show 0 items.
+        const finalPlans = plansData ? plansData : DEFAULT_PLANS;
+        const finalPkgs = packagesData ? packagesData : DEFAULT_PACKAGES;
 
         setDbPlans(finalPlans);
         setDbPackages(finalPkgs);
@@ -223,14 +226,16 @@ const Register: React.FC = () => {
     setError(null);
 
     try {
-      const fullName = `${firstName.trim()} ${lastName.trim()}`;
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            full_name: fullName,
+            first_name: firstName,
+            last_name: lastName,
+            full_name: `${firstName} ${lastName}`,
             role: "member",
+            business_address: businessAddress,
             agreed_to_privacy: agreedToPrivacy,
             agreed_to_partner_sharing: showPartnerCheckbox ? agreedToPartnerSharing : false,
           },
@@ -302,7 +307,7 @@ const Register: React.FC = () => {
               <div className="flex bg-gray-100 p-1.5 rounded-2xl mb-12 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                 <button
                   onClick={() => setActiveTab("plans")}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-heading font-bold transition-all duration-200 cursor-pointer ${
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-heading font-bold transition-all duration-200 cursor-pointer flex-1 justify-center ${
                     activeTab === "plans"
                       ? "bg-white text-green-700 shadow-sm"
                       : "text-gray-500 hover:text-gray-900"
@@ -311,17 +316,19 @@ const Register: React.FC = () => {
                   <Layers size={13} />
                   Membership Plans
                 </button>
-                <button
-                  onClick={() => setActiveTab("packages")}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-heading font-bold transition-all duration-200 cursor-pointer ${
-                    activeTab === "packages"
-                      ? "bg-white text-green-700 shadow-sm"
-                      : "text-gray-500 hover:text-gray-900"
-                  }`}
-                >
-                  <Sparkles size={13} />
-                  Special Packages
-                </button>
+                {dbPackages && dbPackages.length > 0 && (
+                  <button
+                    onClick={() => setActiveTab("packages")}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-heading font-bold transition-all duration-200 cursor-pointer flex-1 justify-center ${
+                      activeTab === "packages"
+                        ? "bg-white text-green-700 shadow-sm"
+                        : "text-gray-500 hover:text-gray-900"
+                    }`}
+                  >
+                    <Sparkles size={13} />
+                    Special Packages
+                  </button>
+                )}
               </div>
 
               {dataLoading ? (
@@ -522,6 +529,22 @@ const Register: React.FC = () => {
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
+                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:border-green-500 focus:ring-4 focus:ring-green-500/10 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[13px] font-heading font-semibold text-gray-700 mb-1.5 ml-1">Business Address / Location</label>
+                    <div className="relative">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Street, City, Province"
+                        value={businessAddress}
+                        onChange={(e) => setBusinessAddress(e.target.value)}
                         className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:border-green-500 focus:ring-4 focus:ring-green-500/10 outline-none transition-all"
                       />
                     </div>
