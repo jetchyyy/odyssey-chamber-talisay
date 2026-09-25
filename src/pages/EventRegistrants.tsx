@@ -506,12 +506,12 @@ const EventRegistrants: React.FC = () => {
           totalPending++;
         }
 
-        if (method === "cash" || method.includes("cash")) {
-          cashCount++;
-          if (isPaid) cashAmount += amount;
-        } else if (method === "gcash") {
+        if (method === "gcash" || method.includes("gcash")) {
           gcashCount++;
           if (isPaid) gcashAmount += amount;
+        } else if (method === "cash" || (method.includes("cash") && !method.includes("gcash"))) {
+          cashCount++;
+          if (isPaid) cashAmount += amount;
         } else if (method === "bank_transfer" || method.includes("bank")) {
           bankTransferCount++;
           if (isPaid) bankTransferAmount += amount;
@@ -1112,10 +1112,13 @@ const EventRegistrants: React.FC = () => {
         </tr>
       `).join("");
 
-      const totalCash = data.filter((r: any) => (r.payment_method || "").toLowerCase() === "cash").length;
-      const totalGCash = data.filter((r: any) => (r.payment_method || "").toLowerCase() === "gcash").length;
+      const totalCash = data.filter((r: any) => {
+        const m = (r.payment_method || "").toLowerCase();
+        return m === "cash" || (m.includes("cash") && !m.includes("gcash"));
+      }).length;
+      const totalGCash = data.filter((r: any) => (r.payment_method || "").toLowerCase().includes("gcash")).length;
       const totalBank = data.filter((r: any) => (r.payment_method || "").toLowerCase().includes("bank")).length;
-      const totalFree = data.filter((r: any) => (r.payment_method || "").toLowerCase() === "free").length;
+      const totalFree = data.filter((r: any) => (r.payment_method || "").toLowerCase().includes("free")).length;
 
       const htmlContent = `
         <!DOCTYPE html>
