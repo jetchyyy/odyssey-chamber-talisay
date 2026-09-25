@@ -503,17 +503,17 @@ export const EventsSection: React.FC = () => {
 
         {/* Asymmetric layout: large featured card + stacked side cards */}
         {activeEvents.length > 0 ? (
-          <div className="grid lg:grid-cols-[1.3fr_0.7fr] gap-5">
+          <div className="grid lg:grid-cols-[1.25fr_1fr] gap-6 items-start">
 
-            {/* Featured event  double-bezel */}
+            {/* Featured event double-bezel */}
             {featured && (
               <motion.article
                 custom={0} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
                 onClick={() => setViewingEvent(featured)}
-                className="bezel-outer shadow-diffuse cursor-pointer group"
+                className="lg:sticky lg:top-28 self-start bezel-outer shadow-diffuse cursor-pointer group"
               >
-                <div className="bezel-inner flex flex-col h-full">
-                  <div className="relative h-64 overflow-hidden rounded-t-[calc(2rem-5px)]">
+                <div className="bezel-inner flex flex-col">
+                  <div className="relative h-64 sm:h-72 overflow-hidden rounded-t-[calc(2rem-5px)] flex-shrink-0">
                     <img src={featured.image_url} alt={featured.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]" />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0D1A14]/70 to-transparent" />
@@ -524,7 +524,7 @@ export const EventsSection: React.FC = () => {
                       {featured.price === 0 ? "Free Event" : `PHP ${featured.price.toLocaleString()}`}
                     </span>
                   </div>
-                  <div className="p-7 flex-1 flex flex-col">
+                  <div className="p-7 flex flex-col">
                     <h3 className="font-heading font-bold text-[#0D1A14] text-xl mb-4 leading-snug group-hover:text-green-700 spring">
                       {featured.title}
                     </h3>
@@ -533,7 +533,7 @@ export const EventsSection: React.FC = () => {
                       <span className="flex items-center gap-2"><Clock size={13} className="text-green-600" />{featured.time}</span>
                       <span className="flex items-center gap-2 col-span-2"><MapPin size={13} className="text-green-600" />{featured.venue}</span>
                     </div>
-                    <div className="mt-auto">
+                    <div className="pt-2">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -551,15 +551,15 @@ export const EventsSection: React.FC = () => {
             )}
 
             {/* Side cards */}
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-4">
               {rest.map((evt, i) => (
                 <motion.article
                   key={evt.id}
                   custom={i + 1} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
                   onClick={() => setViewingEvent(evt)}
-                  className="spotlight-card flex gap-4 p-5 cursor-pointer group flex-1"
+                  className="spotlight-card flex gap-4 p-5 cursor-pointer group hover:border-green-200/80 transition-all shadow-xs hover:shadow-md"
                 >
-                  <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0">
+                  <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 bg-gray-100">
                     <img src={evt.image_url} alt={evt.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -1318,31 +1318,37 @@ export const NewsSection: React.FC = () => {
           </motion.div>
         </div>
 
-        {/* Asymmetric 2-col: big featured + 2 stacked  items-stretch for equal heights */}
+        {/* Asymmetric 2-col: big featured + stacked articles with sticky placement */}
         {activeNews.length > 0 ? (
-          <div className="grid lg:grid-cols-[1.4fr_1fr] gap-6 items-stretch">
+          <div className="grid lg:grid-cols-[1.25fr_1fr] gap-8 items-start">
             {/* Featured */}
             {featured && (
               <motion.article
                 custom={0} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
                 onClick={() => setSelectedNews(featured)}
-                className="group cursor-pointer"
+                className="lg:sticky lg:top-28 self-start group cursor-pointer"
               >
-                <div className="bezel-outer shadow-diffuse h-full">
-                  <div className="bezel-inner flex flex-col h-full">
-                    <div className="h-56 overflow-hidden rounded-t-[calc(2rem-5px)] flex-shrink-0">
+                <div className="bezel-outer shadow-diffuse">
+                  <div className="bezel-inner flex flex-col">
+                    <div className="relative h-64 sm:h-72 overflow-hidden rounded-t-[calc(2rem-5px)] flex-shrink-0">
                       <img src={featured.image_url} alt={featured.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#0D1A14]/40 via-transparent to-transparent" />
                     </div>
-                    <div className="p-7 flex flex-col flex-1">
+                    <div className="p-7 flex flex-col">
                       <div className="flex items-center gap-3 mb-4">
                         <span className="text-[10px] font-heading font-semibold px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-100">{featured.category}</span>
-                        <span className="text-xs text-gray-400 flex items-center gap-1"><Newspaper size={10} /> {featured.read_time || "3 min"} read</span>
+                        <span className="text-xs text-gray-400 flex items-center gap-1"><Newspaper size={11} className="text-green-600" /> {featured.read_time || "3 min"} read</span>
                       </div>
-                      <h3 className="font-heading font-bold text-[#0D1A14] text-xl mb-3 leading-snug group-hover:text-green-700 spring">
+                      <h3 className="font-heading font-bold text-[#0D1A14] text-xl md:text-2xl mb-3 leading-snug group-hover:text-green-700 spring">
                         {featured.title}
                       </h3>
-                      <p className="text-gray-500 text-sm leading-relaxed mb-4 flex-1">{featured.summary}</p>
-                      <span className="text-xs text-gray-400">{new Date(featured.published_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+                      <p className="text-gray-500 text-sm leading-relaxed mb-6 line-clamp-4">{featured.summary}</p>
+                      <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
+                        <span className="text-xs text-gray-400 font-medium">{new Date(featured.published_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+                        <span className="text-xs font-heading font-bold text-green-700 flex items-center gap-1 group-hover:translate-x-1 spring">
+                          Read story <ArrowRight size={12} />
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1350,23 +1356,23 @@ export const NewsSection: React.FC = () => {
             )}
 
             {/* Side articles */}
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-4">
               {rest.map((item, i) => (
                 <motion.article
                   key={item.id}
                   custom={i + 1} variants={spring} initial="hidden" whileInView="visible" viewport={{ once: true }}
                   onClick={() => setSelectedNews(item)}
-                  className="spotlight-card flex gap-4 p-5 cursor-pointer group flex-1"
+                  className="spotlight-card flex gap-4 p-5 cursor-pointer group hover:border-green-200/80 transition-all shadow-xs hover:shadow-md"
                 >
-                  <div className="w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0">
+                  <div className="w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0 bg-gray-100">
                     <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-100">{item.category}</span>
                       <span className="text-[10px] text-gray-400">{item.read_time || "3 min"} read</span>
                     </div>
-                    <h3 className="font-heading font-bold text-[#0D1A14] text-sm leading-snug mb-2 group-hover:text-green-700 spring line-clamp-2">{item.title}</h3>
+                    <h3 className="font-heading font-bold text-[#0D1A14] text-sm leading-snug mb-1.5 group-hover:text-green-700 spring line-clamp-2">{item.title}</h3>
                     <p className="text-gray-400 text-xs leading-relaxed line-clamp-2 mb-2">{item.summary}</p>
                     <span className="text-[11px] text-gray-400">{new Date(item.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                   </div>

@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Search, Loader2, CalendarDays, MapPin,
   User, Check, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Camera, X, FileDown,
-  Receipt, Tag, UserPlus
+  Receipt, Tag, UserPlus, Banknote, Smartphone, Landmark, Gift, Package,
+  Wallet, Filter, CheckCircle2, DollarSign, Sparkles, Layers, ArrowUpDown
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { supabase } from "../lib/supabase";
@@ -29,8 +30,8 @@ interface RegistrationData {
   user_id: string | null;
   full_name: string;
   email: string;
-  payment_method: string;
-  payment_reference: string;
+  payment_method: string | null;
+  payment_reference: string | null;
   payment_proof_url?: string | null;
   payment_status: string;
   attendance_status: string;
@@ -49,6 +50,23 @@ interface RegistrationData {
   } | null;
 }
 
+interface PaymentTrackerSummary {
+  cashCount: number;
+  cashAmount: number;
+  gcashCount: number;
+  gcashAmount: number;
+  bankTransferCount: number;
+  bankTransferAmount: number;
+  freeCount: number;
+  packageCount: number;
+  otherCount: number;
+  otherAmount: number;
+  totalCollected: number;
+  totalPaid: number;
+  totalPending: number;
+  totalRegistrants: number;
+}
+
 const EventRegistrants: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const { user, profile, loading: authLoading, isAdmin } = useAuth();
@@ -61,14 +79,37 @@ const EventRegistrants: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Payment Method Tracker Stats
+  const [paymentStats, setPaymentStats] = useState<PaymentTrackerSummary>({
+    cashCount: 0,
+    cashAmount: 0,
+    gcashCount: 0,
+    gcashAmount: 0,
+    bankTransferCount: 0,
+    bankTransferAmount: 0,
+    freeCount: 0,
+    packageCount: 0,
+    otherCount: 0,
+    otherAmount: 0,
+    totalCollected: 0,
+    totalPaid: 0,
+    totalPending: 0,
+    totalRegistrants: 0,
+  });
+
   // Invoice/Receipt modal states
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [selectedReg, setSelectedReg] = useState<RegistrationData | null>(null);
   const [invoiceNumInput, setInvoiceNumInput] = useState("");
   const [modalPaymentStatus, setModalPaymentStatus] = useState("pending");
+  const [modalPaymentMethod, setModalPaymentMethod] = useState("cash");
+  const [modalPaymentReference, setModalPaymentReference] = useState("");
 
-  // Pagination & Search States
+  // Pagination & Search / Filter States
   const [searchQuery, setSearchQuery] = useState("");
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all");
+  const [attendanceFilter, setAttendanceFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
@@ -425,28 +466,112 @@ const EventRegistrants: React.FC = () => {
     }
   }, [eventId, toast]);
 
-  // Fetch Registrants (Searched & Paginated)
+  // Fetch Event-wide Payment Method Stats & Totals
+  const fetchEventStats = useCallback(async () => {
+    if (!eventId) return;
+    try {
+      const { data, error } = await supabase
+        .from("event_registrations")
+        .select("id, payment_method, payment_status, attendance_status, final_amount, discount_amount")
+        .eq("event_id", eventId);
+
+      if (error) throw error;
+      if (!data) return;
+
+      let cashCount = 0, cashAmount = 0;
+      let gcashCount = 0, gcashAmount = 0;
+      let bankTransferCount = 0, bankTransferAmount = 0;
+      let freeCount = 0;
+      let packageCount = 0;
+      let otherCount = 0, otherAmount = 0;
+      let totalCollected = 0;
+      let totalPaid = 0;
+      let totalPending = 0;
+      let checkedIn = 0;
+
+      data.forEach((r: any) => {
+        const method = (r.payment_method || "cash").toLowerCase();
+        const status = (r.payment_status || "pending").toLowerCase();
+        const amount = Number(r.final_amount) || 0;
+        const isPaid = status === "paid" || status === "free";
+
+        if (r.attendance_status === "attended") {
+          checkedIn++;
+        }
+
+        if (isPaid) {
+          totalPaid++;
+          totalCollected += amount;
+        } else if (status === "pending") {
+          totalPending++;
+        }
+
+        if (method === "cash" || method.includes("cash")) {
+          cashCount++;
+          if (isPaid) cashAmount += amount;
+        } else if (method === "gcash") {
+          gcashCount++;
+          if (isPaid) gcashAmount += amount;
+        } else if (method === "bank_transfer" || method.includes("bank")) {
+          bankTransferCount++;
+          if (isPaid) bankTransferAmount += amount;
+        } else if (method === "free" || method.includes("promo")) {
+          freeCount++;
+        } else if (method === "package" || method.includes("package")) {
+          packageCount++;
+        } else {
+          otherCount++;
+          if (isPaid) otherAmount += amount;
+        }
+      });
+
+      setCheckedInCount(checkedIn);
+      setPaymentStats({
+        cashCount,
+        cashAmount,
+        gcashCount,
+        gcashAmount,
+        bankTransferCount,
+        bankTransferAmount,
+        freeCount,
+        packageCount,
+        otherCount,
+        otherAmount,
+        totalCollected,
+        totalPaid,
+        totalPending,
+        totalRegistrants: data.length,
+      });
+    } catch (err: any) {
+      console.error("Failed to calculate payment stats:", err);
+    }
+  }, [eventId]);
+
+  // Fetch Registrants (Searched, Filtered & Paginated)
   const fetchRegistrants = useCallback(async () => {
     if (!eventId) return;
     setLoading(true);
     try {
-      // 1. Fetch total checked-in count for stats
-      const { count: checkedIn } = await supabase
-        .from("event_registrations")
-        .select("*", { count: "exact", head: true })
-        .eq("event_id", eventId)
-        .eq("attendance_status", "attended");
-
-      setCheckedInCount(checkedIn || 0);
-
-      // 2. Fetch list with current filter and pagination
+      // Fetch list with current filter and pagination
       let query = supabase
         .from("event_registrations")
         .select("*, profiles(membership_status, role), promo_codes(code)", { count: "exact" })
         .eq("event_id", eventId);
 
       if (searchQuery.trim()) {
-        query = query.or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,qr_code.ilike.%${searchQuery}%`);
+        query = query.or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,qr_code.ilike.%${searchQuery}%,payment_reference.ilike.%${searchQuery}%`);
+      }
+
+      if (paymentMethodFilter !== "all") {
+        query = query.eq("payment_method", paymentMethodFilter);
+      }
+
+      if (paymentStatusFilter !== "all") {
+        query = query.eq("payment_status", paymentStatusFilter);
+      }
+
+      if (attendanceFilter !== "all") {
+        query = query.eq("attendance_status", attendanceFilter);
       }
 
       const from = (page - 1) * pageSize;
@@ -465,20 +590,21 @@ const EventRegistrants: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [eventId, searchQuery, page, pageSize, toast]);
+  }, [eventId, searchQuery, paymentMethodFilter, paymentStatusFilter, attendanceFilter, page, pageSize, toast]);
 
   // Initial and reactive load
   useEffect(() => {
     if (user && isAdmin) {
       fetchEventDetails();
+      fetchEventStats();
     }
-  }, [user, isAdmin, fetchEventDetails]);
+  }, [user, isAdmin, fetchEventDetails, fetchEventStats]);
 
   useEffect(() => {
     if (user && isAdmin) {
       fetchRegistrants();
     }
-  }, [user, isAdmin, fetchRegistrants, page, pageSize]);
+  }, [user, isAdmin, fetchRegistrants]);
 
   // Reset page when search query changes
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -501,9 +627,58 @@ const EventRegistrants: React.FC = () => {
       // Update local state directly to be fast and reactive
       setRegistrants(prev => prev.map(r => r.id === regId ? { ...r, attendance_status: nextStatus } : r));
       setCheckedInCount(prev => nextStatus === "attended" ? prev + 1 : Math.max(0, prev - 1));
+      fetchEventStats();
       toast.success(nextStatus === "attended" ? "Attendee checked in successfully!" : "Attendee checked out.");
     } catch (err: any) {
       toast.error("Failed to update status: " + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Update Payment Method Directly
+  const handleUpdatePaymentMethod = async (regId: string, newMethod: string) => {
+    setActionLoading(true);
+    try {
+      const reg = registrants.find(r => r.id === regId);
+      const updates: any = { payment_method: newMethod };
+
+      // Auto adjust payment status if changing to/from free
+      if (newMethod === "free") {
+        updates.payment_status = "free";
+      } else if (reg?.payment_status === "free" && newMethod !== "free") {
+        updates.payment_status = "paid";
+      }
+
+      const { error } = await supabase
+        .from("event_registrations")
+        .update(updates)
+        .eq("id", regId);
+
+      if (error) throw error;
+
+      // Update local state directly
+      setRegistrants(prev => prev.map(r => r.id === regId ? { ...r, ...updates } : r));
+
+      if (selectedReg && selectedReg.id === regId) {
+        setSelectedReg(prev => prev ? { ...prev, ...updates } : null);
+        setModalPaymentMethod(newMethod);
+        if (updates.payment_status) setModalPaymentStatus(updates.payment_status);
+      }
+
+      fetchEventStats();
+
+      const methodNames: Record<string, string> = {
+        cash: "Cash",
+        gcash: "GCash",
+        bank_transfer: "Bank Transfer",
+        free: "Free / Promo",
+        package: "Package Credit",
+        other: "Other"
+      };
+      toast.success(`Payment method updated to ${methodNames[newMethod] || newMethod}`);
+    } catch (err: any) {
+      toast.error("Failed to update payment method: " + err.message);
     } finally {
       setActionLoading(false);
     }
@@ -529,6 +704,7 @@ const EventRegistrants: React.FC = () => {
         setModalPaymentStatus(newStatus);
       }
 
+      fetchEventStats();
       toast.success(`Payment status updated to ${newStatus}`);
     } catch (err: any) {
       toast.error("Failed to update payment status: " + err.message);
@@ -537,8 +713,14 @@ const EventRegistrants: React.FC = () => {
     }
   };
 
-  // Save invoice number and payment status
-  const handleSaveInvoiceAndStatus = async (regId: string, invoiceNumber: string, payStatus: string) => {
+  // Save invoice number, payment status, payment method, and reference
+  const handleSaveInvoiceAndStatus = async (
+    regId: string,
+    invoiceNumber: string,
+    payStatus: string,
+    payMethod: string,
+    payReference: string
+  ) => {
     let formattedInvoice = invoiceNumber.trim();
     if (formattedInvoice && !formattedInvoice.toUpperCase().startsWith("INV-")) {
       formattedInvoice = `INV-${formattedInvoice}`;
@@ -546,12 +728,16 @@ const EventRegistrants: React.FC = () => {
 
     setActionLoading(true);
     try {
+      const updates = {
+        invoice_number: formattedInvoice || null,
+        payment_status: payStatus,
+        payment_method: payMethod,
+        payment_reference: payReference.trim() || null
+      };
+
       const { error } = await supabase
         .from("event_registrations")
-        .update({
-          invoice_number: formattedInvoice || null,
-          payment_status: payStatus
-        })
+        .update(updates)
         .eq("id", regId);
 
       if (error) throw error;
@@ -559,15 +745,16 @@ const EventRegistrants: React.FC = () => {
       // Update local state directly
       setRegistrants(prev => prev.map(r =>
         r.id === regId
-          ? { ...r, invoice_number: formattedInvoice || null, payment_status: payStatus }
+          ? { ...r, ...updates }
           : r
       ));
 
       // If selected registration is open, update its state too
       if (selectedReg && selectedReg.id === regId) {
-        setSelectedReg(prev => prev ? { ...prev, invoice_number: formattedInvoice || null, payment_status: payStatus } : null);
+        setSelectedReg(prev => prev ? { ...prev, ...updates } : null);
       }
 
+      fetchEventStats();
       toast.success("Invoice and payment details updated successfully!");
       setShowInvoiceModal(false);
     } catch (err: any) {
@@ -841,7 +1028,7 @@ const EventRegistrants: React.FC = () => {
             ` : ''}
             <div class="amount-row">
               <span style="color: #6b7280;">Payment Method:</span>
-              <span style="text-transform: capitalize;">${reg.payment_method.replace("_", " ")}</span>
+              <span style="text-transform: capitalize;">${(reg.payment_method || "cash").replace("_", " ")}</span>
             </div>
             ${reg.payment_reference
         ? `<div class="amount-row">
@@ -915,7 +1102,7 @@ const EventRegistrants: React.FC = () => {
           <td style="font-weight: bold;">${reg.full_name}</td>
           <td>${reg.email}</td>
           <td style="text-transform: capitalize;">
-            <div>${reg.payment_method.replace("_", " ")}</div>
+            <div>${(reg.payment_method || "cash").replace("_", " ")}</div>
             ${reg.payment_reference ? `<div style="font-size: 9px; color: #718096; font-family: monospace; margin-top: 2px;">Ref: ${reg.payment_reference}</div>` : ""}
           </td>
           <td style="text-transform: capitalize; font-weight: bold; color: ${reg.payment_status === "paid" || reg.payment_status === "free" ? "#166534" : "#b45309"
@@ -924,6 +1111,11 @@ const EventRegistrants: React.FC = () => {
           <td style="width: 150px;" class="signature-col"></td>
         </tr>
       `).join("");
+
+      const totalCash = data.filter((r: any) => (r.payment_method || "").toLowerCase() === "cash").length;
+      const totalGCash = data.filter((r: any) => (r.payment_method || "").toLowerCase() === "gcash").length;
+      const totalBank = data.filter((r: any) => (r.payment_method || "").toLowerCase().includes("bank")).length;
+      const totalFree = data.filter((r: any) => (r.payment_method || "").toLowerCase() === "free").length;
 
       const htmlContent = `
         <!DOCTYPE html>
@@ -1001,7 +1193,8 @@ const EventRegistrants: React.FC = () => {
             }
             .stats-bar {
               display: flex;
-              gap: 15px;
+              flex-wrap: wrap;
+              gap: 10px;
               margin-bottom: 20px;
             }
             .stat-badge {
@@ -1086,7 +1279,11 @@ const EventRegistrants: React.FC = () => {
 
           <div class="stats-bar">
             <div class="stat-badge">Total Registrants: <span>${data.length}</span></div>
-            <div class="stat-badge">Pre-Checked In: <span>${data.filter((r: any) => r.attendance_status === "attended").length}</span></div>
+            <div class="stat-badge">Checked In: <span>${data.filter((r: any) => r.attendance_status === "attended").length}</span></div>
+            <div class="stat-badge">💵 Cash: <span>${totalCash}</span></div>
+            <div class="stat-badge">📱 GCash: <span>${totalGCash}</span></div>
+            ${totalBank > 0 ? `<div class="stat-badge">🏦 Bank: <span>${totalBank}</span></div>` : ""}
+            ${totalFree > 0 ? `<div class="stat-badge">🎁 Free: <span>${totalFree}</span></div>` : ""}
           </div>
 
           <table>
@@ -1140,30 +1337,30 @@ const EventRegistrants: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0E1B15] text-[#ECEFEF] font-sans pb-16">
       {/* Top Navbar Dashboard Header */}
-      <div className="border-b border-white/5 bg-[#0A1410] py-4 px-6 md:px-10 flex justify-between items-center">
+      <div className="border-b border-white/5 bg-[#0A1410] py-3.5 px-4 sm:px-6 md:px-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/admin?tab=events")}
-            className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors cursor-pointer"
+            className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors cursor-pointer shrink-0"
           >
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="text-lg font-heading font-black text-white">Event Registrants Console</h1>
+            <h1 className="text-base sm:text-lg font-heading font-black text-white leading-tight">Event Registrants Console</h1>
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Talisay Chamber CMS</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full sm:w-auto">
           <button
             onClick={() => { setShowWalkinModal(true); fetchActiveMembers(); }}
-            className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-green-950/20"
+            className="flex items-center gap-1.5 bg-green-700 hover:bg-green-600 text-white px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-green-950/20 shrink-0"
           >
             <UserPlus size={14} />
             <span>Walk-In Reg</span>
           </button>
           <button
             onClick={() => setShowScanner(true)}
-            className="flex items-center gap-2 bg-[#10241A] hover:bg-[#163526] text-green-400 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border border-green-500/10 cursor-pointer shadow-lg shadow-green-950/20"
+            className="flex items-center gap-1.5 bg-[#10241A] hover:bg-[#163526] text-green-400 px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all border border-green-500/10 cursor-pointer shadow-lg shadow-green-950/20 shrink-0"
           >
             <Camera size={14} />
             <span>Scan Pass</span>
@@ -1171,7 +1368,7 @@ const EventRegistrants: React.FC = () => {
           <button
             onClick={handleExportPDF}
             disabled={actionLoading}
-            className="flex items-center gap-2 bg-white/[0.02] hover:bg-white/5 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all border border-white/10 cursor-pointer shadow-lg hover:border-white/20"
+            className="flex items-center gap-1.5 bg-white/[0.02] hover:bg-white/5 text-white px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all border border-white/10 cursor-pointer shadow-lg hover:border-white/20 shrink-0"
           >
             {actionLoading ? (
               <Loader2 size={14} className="animate-spin text-green-500" />
@@ -1182,36 +1379,36 @@ const EventRegistrants: React.FC = () => {
           </button>
           <button
             onClick={() => { setPage(1); fetchRegistrants(); }}
-            className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white cursor-pointer transition-colors"
+            className="p-2 rounded-xl bg-white/[0.02] hover:bg-white/5 border border-white/5 text-gray-400 hover:text-white cursor-pointer transition-colors shrink-0"
             title="Refresh List"
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={15} />
           </button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 md:px-10 mt-8 space-y-6">
+      <div className="max-w-7xl mx-auto px-3.5 sm:px-6 md:px-10 mt-4 sm:mt-8 space-y-5 sm:space-y-6">
         {/* EVENT DETAIL CARD */}
         {event && (
-          <div className="bg-[#0A1410] border border-white/5 rounded-3xl p-6 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-3 z-10">
+          <div className="bg-[#0A1410] border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-6 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
+            <div className="space-y-2.5 sm:space-y-3 z-10">
               <span className="label-pill !bg-green-950/40 !text-green-300 !border-green-800/40">Event Details</span>
-              <h2 className="text-xl md:text-2xl font-heading font-black text-white">{event.title}</h2>
-              <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-gray-400 font-semibold">
-                <span className="flex items-center gap-2"><CalendarDays size={14} className="text-green-500" /> {event.date} @ {event.time}</span>
-                <span className="flex items-center gap-2"><MapPin size={14} className="text-green-500" /> {event.venue}</span>
-                <span className="flex items-center gap-2"><User size={14} className="text-green-500" /> Speaker: {event.speaker}</span>
+              <h2 className="text-lg sm:text-xl md:text-2xl font-heading font-black text-white break-words">{event.title}</h2>
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-x-6 gap-y-1.5 sm:gap-y-2 text-xs text-gray-400 font-semibold">
+                <span className="flex items-center gap-2"><CalendarDays size={14} className="text-green-500 shrink-0" /> {event.date} @ {event.time}</span>
+                <span className="flex items-center gap-2"><MapPin size={14} className="text-green-500 shrink-0" /> {event.venue}</span>
+                <span className="flex items-center gap-2"><User size={14} className="text-green-500 shrink-0" /> Speaker: {event.speaker}</span>
               </div>
             </div>
 
             {/* Quick Stats Grid */}
-            <div className="flex gap-4 z-10">
-              <div className="px-5 py-4 rounded-2xl bg-white/[0.02] border border-white/5 text-center min-w-[100px]">
-                <div className="text-2xl font-heading font-black text-white">{totalCount}</div>
+            <div className="grid grid-cols-2 sm:flex gap-2.5 sm:gap-4 w-full md:w-auto z-10">
+              <div className="px-3.5 sm:px-5 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white/[0.02] border border-white/5 text-center min-w-[80px] sm:min-w-[100px]">
+                <div className="text-xl sm:text-2xl font-heading font-black text-white">{totalCount}</div>
                 <div className="text-[9px] text-gray-400 font-bold uppercase mt-1 tracking-wider">Total Registered</div>
               </div>
-              <div className="px-5 py-4 rounded-2xl bg-green-950/20 border border-green-500/10 text-center min-w-[100px]">
-                <div className="text-2xl font-heading font-black text-green-400">{checkedInCount}</div>
+              <div className="px-3.5 sm:px-5 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-green-950/20 border border-green-500/10 text-center min-w-[80px] sm:min-w-[100px]">
+                <div className="text-xl sm:text-2xl font-heading font-black text-green-400">{checkedInCount}</div>
                 <div className="text-[9px] text-green-500/80 font-bold uppercase mt-1 tracking-wider">Checked In</div>
               </div>
             </div>
@@ -1221,51 +1418,447 @@ const EventRegistrants: React.FC = () => {
           </div>
         )}
 
+        {/* PAYMENT METHOD TRACKER CARD */}
+        <div className="bg-[#0A1410] border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-6 relative overflow-hidden space-y-4 sm:space-y-5">
+          {/* Tracker Header */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 border-b border-white/5 pb-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="label-pill !bg-emerald-950/40 !text-emerald-300 !border-emerald-800/40 flex items-center gap-1.5">
+                  <DollarSign size={12} className="text-emerald-400" /> Payment & Settlement Tracker
+                </span>
+                {paymentMethodFilter !== "all" && (
+                  <span className="label-pill !bg-sky-950/40 !text-sky-300 !border-sky-800/40 flex items-center gap-1">
+                    <Filter size={10} /> Filter: {paymentMethodFilter.toUpperCase().replace("_", " ")}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-base sm:text-lg font-heading font-black text-white mt-1.5 flex items-center gap-2">
+                Payment Channel Breakdown
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Track payments by channel (Cash vs GCash vs Bank vs Free), check revenue totals, and audit settlements.
+              </p>
+            </div>
+
+            {/* Summary KPI Badges */}
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">
+              <div className="p-2.5 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl bg-emerald-950/30 border border-emerald-500/20 text-left sm:text-right">
+                <div className="text-[9px] sm:text-[10px] text-emerald-400/80 font-bold uppercase tracking-wider">Total Collected</div>
+                <div className="text-base sm:text-lg font-heading font-black text-emerald-300">
+                  PHP {paymentStats.totalCollected.toLocaleString()}
+                </div>
+              </div>
+              <div className="p-2.5 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white/[0.02] border border-white/5 text-left sm:text-right">
+                <div className="text-[9px] sm:text-[10px] text-gray-400 font-bold uppercase tracking-wider">Settled / Verified</div>
+                <div className="text-base sm:text-lg font-heading font-black text-white">
+                  {paymentStats.totalPaid} <span className="text-xs text-gray-500 font-normal">/ {paymentStats.totalRegistrants}</span>
+                </div>
+              </div>
+              {paymentStats.totalPending > 0 && (
+                <div className="p-2.5 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl bg-amber-950/20 border border-amber-500/20 text-left sm:text-right col-span-2 sm:col-span-1">
+                  <div className="text-[9px] sm:text-[10px] text-amber-400/80 font-bold uppercase tracking-wider">Pending Payment</div>
+                  <div className="text-base sm:text-lg font-heading font-black text-amber-300">
+                    {paymentStats.totalPending}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Interactive Payment Method Tracker Cards Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
+            {/* CASH CARD */}
+            <div
+              onClick={() => {
+                setPaymentMethodFilter(prev => prev === "cash" ? "all" : "cash");
+                setPage(1);
+              }}
+              className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer select-none relative overflow-hidden group ${
+                paymentMethodFilter === "cash"
+                  ? "bg-emerald-950/40 border-emerald-500/60 shadow-lg shadow-emerald-950/50 ring-1 ring-emerald-500/50"
+                  : "bg-white/[0.02] border-white/5 hover:bg-emerald-950/20 hover:border-emerald-500/30"
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <Banknote size={16} />
+                </div>
+                {paymentMethodFilter === "cash" ? (
+                  <span className="text-[9px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 sm:px-2 py-0.5 rounded-full border border-emerald-500/30">
+                    Filtered
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-gray-500 group-hover:text-emerald-400 transition-colors">
+                    {paymentStats.totalRegistrants > 0
+                      ? `${Math.round((paymentStats.cashCount / paymentStats.totalRegistrants) * 100)}%`
+                      : "0%"}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2.5 sm:mt-3">
+                <div className="text-xs font-bold text-gray-300">Cash</div>
+                <div className="text-lg sm:text-xl font-heading font-black text-white mt-0.5">
+                  {paymentStats.cashCount} <span className="text-[10px] sm:text-[11px] text-gray-500 font-normal">attendees</span>
+                </div>
+                <div className="text-xs font-semibold text-emerald-400 mt-0.5 sm:mt-1">
+                  ₱{paymentStats.cashAmount.toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {/* GCASH CARD */}
+            <div
+              onClick={() => {
+                setPaymentMethodFilter(prev => prev === "gcash" ? "all" : "gcash");
+                setPage(1);
+              }}
+              className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer select-none relative overflow-hidden group ${
+                paymentMethodFilter === "gcash"
+                  ? "bg-sky-950/40 border-sky-500/60 shadow-lg shadow-sky-950/50 ring-1 ring-sky-500/50"
+                  : "bg-white/[0.02] border-white/5 hover:bg-sky-950/20 hover:border-sky-500/30"
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                  <Smartphone size={16} />
+                </div>
+                {paymentMethodFilter === "gcash" ? (
+                  <span className="text-[9px] font-bold text-sky-300 bg-sky-500/20 px-1.5 sm:px-2 py-0.5 rounded-full border border-sky-500/30">
+                    Filtered
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-gray-500 group-hover:text-sky-400 transition-colors">
+                    {paymentStats.totalRegistrants > 0
+                      ? `${Math.round((paymentStats.gcashCount / paymentStats.totalRegistrants) * 100)}%`
+                      : "0%"}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2.5 sm:mt-3">
+                <div className="text-xs font-bold text-gray-300">GCash</div>
+                <div className="text-lg sm:text-xl font-heading font-black text-white mt-0.5">
+                  {paymentStats.gcashCount} <span className="text-[10px] sm:text-[11px] text-gray-500 font-normal">attendees</span>
+                </div>
+                <div className="text-xs font-semibold text-sky-400 mt-0.5 sm:mt-1">
+                  ₱{paymentStats.gcashAmount.toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {/* BANK TRANSFER CARD */}
+            <div
+              onClick={() => {
+                setPaymentMethodFilter(prev => prev === "bank_transfer" ? "all" : "bank_transfer");
+                setPage(1);
+              }}
+              className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer select-none relative overflow-hidden group ${
+                paymentMethodFilter === "bank_transfer"
+                  ? "bg-purple-950/40 border-purple-500/60 shadow-lg shadow-purple-950/50 ring-1 ring-purple-500/50"
+                  : "bg-white/[0.02] border-white/5 hover:bg-purple-950/20 hover:border-purple-500/30"
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                  <Landmark size={16} />
+                </div>
+                {paymentMethodFilter === "bank_transfer" ? (
+                  <span className="text-[9px] font-bold text-purple-300 bg-purple-500/20 px-1.5 sm:px-2 py-0.5 rounded-full border border-purple-500/30">
+                    Filtered
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-gray-500 group-hover:text-purple-400 transition-colors">
+                    {paymentStats.totalRegistrants > 0
+                      ? `${Math.round((paymentStats.bankTransferCount / paymentStats.totalRegistrants) * 100)}%`
+                      : "0%"}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2.5 sm:mt-3">
+                <div className="text-xs font-bold text-gray-300">Bank Transfer</div>
+                <div className="text-lg sm:text-xl font-heading font-black text-white mt-0.5">
+                  {paymentStats.bankTransferCount} <span className="text-[10px] sm:text-[11px] text-gray-500 font-normal">attendees</span>
+                </div>
+                <div className="text-xs font-semibold text-purple-400 mt-0.5 sm:mt-1">
+                  ₱{paymentStats.bankTransferAmount.toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {/* FREE / PROMO CARD */}
+            <div
+              onClick={() => {
+                setPaymentMethodFilter(prev => prev === "free" ? "all" : "free");
+                setPage(1);
+              }}
+              className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer select-none relative overflow-hidden group ${
+                paymentMethodFilter === "free"
+                  ? "bg-amber-950/40 border-amber-500/60 shadow-lg shadow-amber-950/50 ring-1 ring-amber-500/50"
+                  : "bg-white/[0.02] border-white/5 hover:bg-amber-950/20 hover:border-amber-500/30"
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <Gift size={16} />
+                </div>
+                {paymentMethodFilter === "free" ? (
+                  <span className="text-[9px] font-bold text-amber-300 bg-amber-500/20 px-1.5 sm:px-2 py-0.5 rounded-full border border-amber-500/30">
+                    Filtered
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-gray-500 group-hover:text-amber-400 transition-colors">
+                    {paymentStats.totalRegistrants > 0
+                      ? `${Math.round((paymentStats.freeCount / paymentStats.totalRegistrants) * 100)}%`
+                      : "0%"}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2.5 sm:mt-3">
+                <div className="text-xs font-bold text-gray-300">Free / Promo</div>
+                <div className="text-lg sm:text-xl font-heading font-black text-white mt-0.5">
+                  {paymentStats.freeCount} <span className="text-[10px] sm:text-[11px] text-gray-500 font-normal">attendees</span>
+                </div>
+                <div className="text-xs font-semibold text-amber-400 mt-0.5 sm:mt-1">
+                  Complimentary
+                </div>
+              </div>
+            </div>
+
+            {/* PACKAGE / OTHER CARD */}
+            <div
+              onClick={() => {
+                setPaymentMethodFilter(prev => (prev === "package" || prev === "other") ? "all" : "package");
+                setPage(1);
+              }}
+              className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer select-none relative overflow-hidden group ${
+                (paymentMethodFilter === "package" || paymentMethodFilter === "other")
+                  ? "bg-teal-950/40 border-teal-500/60 shadow-lg shadow-teal-950/50 ring-1 ring-teal-500/50"
+                  : "bg-white/[0.02] border-white/5 hover:bg-teal-950/20 hover:border-teal-500/30"
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                  <Package size={16} />
+                </div>
+                {(paymentMethodFilter === "package" || paymentMethodFilter === "other") ? (
+                  <span className="text-[9px] font-bold text-teal-300 bg-teal-500/20 px-1.5 sm:px-2 py-0.5 rounded-full border border-teal-500/30">
+                    Filtered
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-gray-500 group-hover:text-teal-400 transition-colors">
+                    {paymentStats.totalRegistrants > 0
+                      ? `${Math.round(((paymentStats.packageCount + paymentStats.otherCount) / paymentStats.totalRegistrants) * 100)}%`
+                      : "0%"}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2.5 sm:mt-3">
+                <div className="text-xs font-bold text-gray-300">Pass / Other</div>
+                <div className="text-lg sm:text-xl font-heading font-black text-white mt-0.5">
+                  {paymentStats.packageCount + paymentStats.otherCount} <span className="text-[10px] sm:text-[11px] text-gray-500 font-normal">attendees</span>
+                </div>
+                <div className="text-xs font-semibold text-teal-400 mt-0.5 sm:mt-1 truncate">
+                  {paymentStats.packageCount > 0 ? `${paymentStats.packageCount} Passes` : "Other Settlement"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Proportional Distribution Bar */}
+          {paymentStats.totalRegistrants > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <div className="flex justify-between items-center text-[10px] text-gray-400 font-semibold">
+                <span>Payment Channel Distribution</span>
+                <span>{paymentStats.totalRegistrants} Total Registered</span>
+              </div>
+              <div className="h-2.5 w-full bg-white/5 rounded-full overflow-hidden flex">
+                {paymentStats.cashCount > 0 && (
+                  <div
+                    style={{ width: `${(paymentStats.cashCount / paymentStats.totalRegistrants) * 100}%` }}
+                    className="bg-emerald-500 hover:opacity-90 transition-all cursor-pointer"
+                    title={`Cash: ${paymentStats.cashCount} (${Math.round((paymentStats.cashCount / paymentStats.totalRegistrants) * 100)}%)`}
+                  />
+                )}
+                {paymentStats.gcashCount > 0 && (
+                  <div
+                    style={{ width: `${(paymentStats.gcashCount / paymentStats.totalRegistrants) * 100}%` }}
+                    className="bg-sky-500 hover:opacity-90 transition-all cursor-pointer"
+                    title={`GCash: ${paymentStats.gcashCount} (${Math.round((paymentStats.gcashCount / paymentStats.totalRegistrants) * 100)}%)`}
+                  />
+                )}
+                {paymentStats.bankTransferCount > 0 && (
+                  <div
+                    style={{ width: `${(paymentStats.bankTransferCount / paymentStats.totalRegistrants) * 100}%` }}
+                    className="bg-purple-500 hover:opacity-90 transition-all cursor-pointer"
+                    title={`Bank Transfer: ${paymentStats.bankTransferCount} (${Math.round((paymentStats.bankTransferCount / paymentStats.totalRegistrants) * 100)}%)`}
+                  />
+                )}
+                {paymentStats.freeCount > 0 && (
+                  <div
+                    style={{ width: `${(paymentStats.freeCount / paymentStats.totalRegistrants) * 100}%` }}
+                    className="bg-amber-500 hover:opacity-90 transition-all cursor-pointer"
+                    title={`Free / Promo: ${paymentStats.freeCount} (${Math.round((paymentStats.freeCount / paymentStats.totalRegistrants) * 100)}%)`}
+                  />
+                )}
+                {(paymentStats.packageCount + paymentStats.otherCount) > 0 && (
+                  <div
+                    style={{ width: `${((paymentStats.packageCount + paymentStats.otherCount) / paymentStats.totalRegistrants) * 100}%` }}
+                    className="bg-teal-500 hover:opacity-90 transition-all cursor-pointer"
+                    title={`Package / Other: ${paymentStats.packageCount + paymentStats.otherCount} (${Math.round(((paymentStats.packageCount + paymentStats.otherCount) / paymentStats.totalRegistrants) * 100)}%)`}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* REGISTRANTS CONTAINER */}
-        <div className="bg-[#0A1410] border border-white/5 rounded-3xl p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+        <div className="bg-[#0A1410] border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-6 space-y-4 sm:space-y-6">
+          {/* Filters & Search Toolbar */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
             {/* Search Input */}
-            <div className="relative flex-1 max-w-md">
+            <div className="relative w-full md:max-w-md">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={handleSearchChange}
-                placeholder="Search registrants by name, email, or passcode..."
-                className="w-full pl-10 pr-4 py-2 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white placeholder-gray-500 outline-none focus:border-green-500/40 transition-colors"
+                placeholder="Search name, email, passcode, reference..."
+                className="w-full pl-10 pr-4 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white placeholder-gray-500 outline-none focus:border-green-500/40 transition-colors"
               />
             </div>
 
-            {/* Page Size Selector */}
-            <div className="flex items-center gap-2 self-end sm:self-auto text-xs text-gray-400">
-              <span>Show</span>
+            {/* Filter Selectors & Options */}
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+              {/* Payment Method Filter */}
+              <select
+                value={paymentMethodFilter}
+                onChange={(e) => {
+                  setPaymentMethodFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-[#101D17] border border-white/10 rounded-xl px-2.5 sm:px-3 py-2 text-xs text-white outline-none cursor-pointer hover:border-white/20 w-full sm:w-auto"
+              >
+                <option value="all">All Methods</option>
+                <option value="cash">💵 Cash</option>
+                <option value="gcash">📱 GCash</option>
+                <option value="bank_transfer">🏦 Bank Transfer</option>
+                <option value="free">🎁 Free / Promo</option>
+                <option value="package">📦 Package Pass</option>
+                <option value="other">🏷️ Other</option>
+              </select>
+
+              {/* Payment Status Filter */}
+              <select
+                value={paymentStatusFilter}
+                onChange={(e) => {
+                  setPaymentStatusFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-[#101D17] border border-white/10 rounded-xl px-2.5 sm:px-3 py-2 text-xs text-white outline-none cursor-pointer hover:border-white/20 w-full sm:w-auto"
+              >
+                <option value="all">All Statuses</option>
+                <option value="paid">Paid</option>
+                <option value="pending">Pending</option>
+                <option value="free">Free</option>
+                <option value="rejected">Rejected</option>
+              </select>
+
+              {/* Attendance Filter */}
+              <select
+                value={attendanceFilter}
+                onChange={(e) => {
+                  setAttendanceFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-[#101D17] border border-white/10 rounded-xl px-2.5 sm:px-3 py-2 text-xs text-white outline-none cursor-pointer hover:border-white/20 w-full sm:w-auto"
+              >
+                <option value="all">All Attendance</option>
+                <option value="attended">Attended</option>
+                <option value="registered">Registered</option>
+              </select>
+
+              {/* Page Size Selector */}
               <select
                 value={pageSize}
                 onChange={(e) => {
                   setPageSize(Number(e.target.value));
                   setPage(1);
                 }}
-                className="bg-[#101D17] border border-white/10 rounded-lg px-2 py-1 text-white outline-none cursor-pointer"
+                className="bg-[#101D17] border border-white/10 rounded-xl px-2.5 py-2 text-xs text-white outline-none cursor-pointer w-full sm:w-auto"
               >
                 <option value={10}>10 rows</option>
                 <option value={25}>25 rows</option>
                 <option value={50}>50 rows</option>
               </select>
+
+              {/* Reset Filters */}
+              {(paymentMethodFilter !== "all" || paymentStatusFilter !== "all" || attendanceFilter !== "all" || searchQuery) && (
+                <button
+                  onClick={() => {
+                    setPaymentMethodFilter("all");
+                    setPaymentStatusFilter("all");
+                    setAttendanceFilter("all");
+                    setSearchQuery("");
+                    setPage(1);
+                  }}
+                  className="col-span-2 sm:col-span-1 px-3 py-2 text-xs font-bold text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-center"
+                  title="Reset all filters"
+                >
+                  Reset
+                </button>
+              )}
             </div>
           </div>
 
-          {/* TABLE CONTAINER */}
-          <div className="overflow-x-auto border border-white/5 rounded-2xl bg-white/[0.01]">
-            <table className="w-full text-left text-xs border-collapse">
+          {/* Active Filter Bar Info */}
+          {(paymentMethodFilter !== "all" || paymentStatusFilter !== "all" || attendanceFilter !== "all") && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white/[0.02] border border-white/5 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-gray-400">
+                <Filter size={12} className="text-green-400 shrink-0" />
+                <span className="font-semibold text-gray-300">Active Filters:</span>
+                {paymentMethodFilter !== "all" && (
+                  <span className="bg-white/5 text-white px-2 py-0.5 rounded font-mono text-[11px]">
+                    Method: {paymentMethodFilter.toUpperCase().replace("_", " ")}
+                  </span>
+                )}
+                {paymentStatusFilter !== "all" && (
+                  <span className="bg-white/5 text-white px-2 py-0.5 rounded font-mono text-[11px]">
+                    Status: {paymentStatusFilter}
+                  </span>
+                )}
+                {attendanceFilter !== "all" && (
+                  <span className="bg-white/5 text-white px-2 py-0.5 rounded font-mono text-[11px]">
+                    Attendance: {attendanceFilter}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setPaymentMethodFilter("all");
+                  setPaymentStatusFilter("all");
+                  setAttendanceFilter("all");
+                  setPage(1);
+                }}
+                className="text-gray-400 hover:text-white text-xs underline cursor-pointer self-end sm:self-auto"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+
+          {/* TABLE CONTAINER WITH SAFE HORIZONTAL SCROLL ON MOBILE */}
+          <div className="overflow-x-auto border border-white/5 rounded-2xl bg-white/[0.01] -mx-1 sm:mx-0">
+            <table className="w-full text-left text-xs border-collapse min-w-[760px]">
               <thead>
                 <tr className="border-b border-white/5 text-gray-400 font-bold uppercase tracking-wider bg-white/[0.01]">
-                  <th className="py-4 px-4">Name</th>
-                  <th className="py-4 px-4">Email</th>
-                  <th className="py-4 px-4">Reference Code</th>
-                  <th className="py-4 px-4">Payment Method</th>
-                  <th className="py-4 px-4">Payment Status</th>
-                  <th className="py-4 px-4">Attendance</th>
-                  <th className="py-4 px-4 text-right">Actions</th>
+                  <th className="py-3.5 px-4">Name</th>
+                  <th className="py-3.5 px-4">Email</th>
+                  <th className="py-3.5 px-4">Reference Code</th>
+                  <th className="py-3.5 px-4">Payment Method</th>
+                  <th className="py-3.5 px-4">Payment Status</th>
+                  <th className="py-3.5 px-4">Attendance</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 font-semibold text-gray-200">
@@ -1283,33 +1876,63 @@ const EventRegistrants: React.FC = () => {
                     <td colSpan={7} className="text-center py-16">
                       <div className="flex flex-col items-center gap-2 text-gray-500">
                         <AlertTriangle size={24} />
-                        <span className="text-xs">No event registrations found.</span>
+                        <span className="text-xs">No event registrations found matching criteria.</span>
                       </div>
                     </td>
                   </tr>
                 ) : (
                   registrants.map((reg) => (
                     <tr key={reg.id} className="hover:bg-white/[0.01] transition-colors">
-                      <td className="py-4 px-4 text-white font-bold">{reg.full_name}</td>
-                      <td className="py-4 px-4 text-gray-400 font-normal">{reg.email}</td>
-                      <td className="py-4 px-4 font-mono text-gray-400">{reg.qr_code}</td>
-                      <td className="py-4 px-4 capitalize font-normal text-gray-400">
-                        <div className="text-white">{reg.payment_method.replace("_", " ")}</div>
-                        {reg.payment_reference && (
-                          <div className="text-[10px] text-gray-500 font-mono mt-0.5">Ref: {reg.payment_reference}</div>
-                        )}
-                        {reg.discount_amount && reg.discount_amount > 0 ? (
-                          <div className="text-[10px] text-green-400 font-bold mt-1 flex items-center gap-1">
-                            <Tag size={10} /> {reg.promo_codes?.code || "Promo Discount"}
-                          </div>
-                        ) : null}
+                      <td className="py-3.5 px-4 text-white font-bold">{reg.full_name}</td>
+                      <td className="py-3.5 px-4 text-gray-400 font-normal">{reg.email}</td>
+                      <td className="py-3.5 px-4 font-mono text-gray-400">{reg.qr_code}</td>
+                      <td className="py-3.5 px-4 font-normal text-gray-400">
+                        {/* Interactive In-table Payment Method Selector */}
+                        <div className="flex flex-col gap-1">
+                          <select
+                            value={reg.payment_method || "cash"}
+                            disabled={actionLoading}
+                            onChange={(e) => handleUpdatePaymentMethod(reg.id, e.target.value)}
+                            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold border outline-none cursor-pointer transition-all ${
+                              reg.payment_method === "gcash"
+                                ? "bg-sky-950/40 text-sky-300 border-sky-500/30 hover:border-sky-500/60"
+                                : reg.payment_method === "cash"
+                                ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/30 hover:border-emerald-500/60"
+                                : reg.payment_method === "bank_transfer"
+                                ? "bg-purple-950/40 text-purple-300 border-purple-500/30 hover:border-purple-500/60"
+                                : reg.payment_method === "free"
+                                ? "bg-amber-950/40 text-amber-300 border-amber-500/30 hover:border-amber-500/60"
+                                : reg.payment_method === "package"
+                                ? "bg-teal-950/40 text-teal-300 border-teal-500/30 hover:border-teal-500/60"
+                                : "bg-[#101D17] text-white border-white/10 hover:border-white/20"
+                            }`}
+                          >
+                            <option value="cash" className="bg-[#0A1410] text-emerald-300">💵 Cash</option>
+                            <option value="gcash" className="bg-[#0A1410] text-sky-300">📱 GCash</option>
+                            <option value="bank_transfer" className="bg-[#0A1410] text-purple-300">🏦 Bank Transfer</option>
+                            <option value="free" className="bg-[#0A1410] text-amber-300">🎁 Free / Promo</option>
+                            <option value="package" className="bg-[#0A1410] text-teal-300">📦 Package Pass</option>
+                            <option value="other" className="bg-[#0A1410] text-gray-300">🏷️ Other</option>
+                          </select>
+
+                          {reg.payment_reference && (
+                            <div className="text-[10px] text-gray-500 font-mono truncate max-w-[140px]" title={reg.payment_reference}>
+                              Ref: {reg.payment_reference}
+                            </div>
+                          )}
+                          {reg.discount_amount && reg.discount_amount > 0 ? (
+                            <div className="text-[10px] text-green-400 font-bold mt-0.5 flex items-center gap-1">
+                              <Tag size={10} /> {reg.promo_codes?.code || "Promo Discount"}
+                            </div>
+                          ) : null}
+                        </div>
                       </td>
-                      <td className="py-4 px-4">
+                      <td className="py-3.5 px-4">
                         <select
                           value={reg.payment_status}
                           disabled={actionLoading}
                           onChange={(e) => handleUpdatePaymentStatus(reg.id, e.target.value)}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-bold border outline-none cursor-pointer bg-[#101D17] ${reg.payment_status === "paid" || reg.payment_status === "free"
+                          className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border outline-none cursor-pointer bg-[#101D17] ${reg.payment_status === "paid" || reg.payment_status === "free"
                             ? "border-green-500/30 text-green-400"
                             : reg.payment_status === "rejected"
                               ? "border-red-500/30 text-red-400"
@@ -1322,7 +1945,7 @@ const EventRegistrants: React.FC = () => {
                           <option value="rejected" className="bg-[#0E1B15] text-white">Rejected</option>
                         </select>
                       </td>
-                      <td className="py-4 px-4 capitalize">
+                      <td className="py-3.5 px-4 capitalize">
                         <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold ${reg.attendance_status === "attended"
                           ? "bg-green-500/10 text-green-400 border border-green-500/25"
                           : "bg-white/5 text-gray-400 border border-white/10"
@@ -1330,24 +1953,26 @@ const EventRegistrants: React.FC = () => {
                           {reg.attendance_status}
                         </span>
                       </td>
-                      <td className="py-4 px-4 text-right">
+                      <td className="py-3.5 px-4 text-right">
                         <div className="flex justify-end items-center gap-2">
                           <button
                             onClick={() => {
                               setSelectedReg(reg);
                               setInvoiceNumInput(reg.invoice_number || "");
-                              setModalPaymentStatus(reg.payment_status);
+                              setModalPaymentStatus(reg.payment_status || "pending");
+                              setModalPaymentMethod(reg.payment_method || "cash");
+                              setModalPaymentReference(reg.payment_reference || "");
                               setShowInvoiceModal(true);
                             }}
-                            className="px-2.5 py-1.5 rounded-lg border border-white/5 text-[10px] font-bold text-green-400 bg-[#11241C] hover:bg-[#152F24] transition-colors cursor-pointer flex items-center gap-1.5"
+                            className="px-2.5 py-1.5 rounded-lg border border-white/5 text-[10px] font-bold text-green-400 bg-[#11241C] hover:bg-[#152F24] transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
                           >
                             <Receipt size={12} />
-                            {reg.invoice_number ? reg.invoice_number : "Invoice"}
+                            {reg.invoice_number ? reg.invoice_number : "Invoice & Edit"}
                           </button>
                           <button
                             onClick={() => handleToggleAttendance(reg.id, reg.attendance_status)}
                             disabled={actionLoading}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-colors ${reg.attendance_status === "attended"
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-colors shrink-0 ${reg.attendance_status === "attended"
                               ? "bg-green-800 hover:bg-green-700 text-white"
                               : "bg-[#10241A] hover:bg-[#163526] text-green-400"
                               }`}
@@ -1365,7 +1990,7 @@ const EventRegistrants: React.FC = () => {
 
           {/* PAGINATION CONTROLS */}
           {!loading && totalCount > 0 && (
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-gray-400">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-gray-400 pt-2 text-center sm:text-left">
               <div>
                 Showing <span className="text-white font-bold">{(page - 1) * pageSize + 1}</span> to{" "}
                 <span className="text-white font-bold">{Math.min(page * pageSize, totalCount)}</span> of{" "}
@@ -1419,16 +2044,16 @@ const EventRegistrants: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4"
           >
             <motion.div
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
-              className="bg-[#0A1410] border border-white/10 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative"
+              className="bg-[#0A1410] border border-white/10 rounded-2xl sm:rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative"
             >
               {/* Header */}
-              <div className="p-5 border-b border-white/5 flex justify-between items-center bg-[#070E0B]">
+              <div className="p-4 sm:p-5 border-b border-white/5 flex justify-between items-center bg-[#070E0B]">
                 <div className="flex items-center gap-2.5">
                   <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
                   <h3 className="font-heading font-black text-white text-base">Check-In Scanner</h3>
@@ -1442,8 +2067,8 @@ const EventRegistrants: React.FC = () => {
               </div>
 
               {/* Scanner View Area */}
-              <div className="p-6 flex flex-col items-center justify-center bg-[#08110D]">
-                <div className="relative w-72 h-72 rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex items-center justify-center">
+              <div className="p-4 sm:p-6 flex flex-col items-center justify-center bg-[#08110D]">
+                <div className="relative w-64 sm:w-72 h-64 sm:h-72 rounded-2xl overflow-hidden border border-white/10 bg-black/40 flex items-center justify-center">
 
                   {/* html5-qrcode targets this ID */}
                   <div id="qr-reader" className="w-full h-full [&_video]:object-cover" />
@@ -1475,7 +2100,7 @@ const EventRegistrants: React.FC = () => {
                     className={`border-t ${scanResult.success
                       ? "bg-green-950/90 border-green-500/30 text-green-200"
                       : "bg-red-950/90 border-red-500/30 text-red-200"
-                      } p-5 overflow-hidden`}
+                      } p-4 sm:p-5 overflow-hidden`}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`p-1.5 rounded-lg shrink-0 ${scanResult.success ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
@@ -1500,26 +2125,26 @@ const EventRegistrants: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* INVOICE & RECEIPT MODAL */}
+      {/* INVOICE & PAYMENT DETAILS MODAL */}
       <AnimatePresence>
         {showInvoiceModal && selectedReg && (
-          <div className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-md bg-[#0A1410] border border-white/10 rounded-3xl p-6 overflow-hidden shadow-2xl relative"
+              className="w-full max-w-md bg-[#0A1410] border border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 overflow-hidden shadow-2xl relative max-h-[92vh] flex flex-col"
             >
               {/* Header */}
-              <div className="flex justify-between items-start mb-6 pb-4 border-b border-white/5">
+              <div className="flex justify-between items-start mb-4 pb-3 border-b border-white/5 shrink-0">
                 <div>
                   <span className="text-[10px] font-bold text-green-400 uppercase tracking-widest bg-green-500/10 border border-green-500/20 px-2.5 py-0.5 rounded-full">
                     Invoice & Payment Manager
                   </span>
-                  <h3 className="font-heading font-black text-white text-base mt-2">
+                  <h3 className="font-heading font-black text-white text-base mt-2 truncate max-w-[260px]">
                     {selectedReg.full_name}
                   </h3>
-                  <p className="text-[11px] text-gray-400">{selectedReg.email}</p>
+                  <p className="text-[11px] text-gray-400 truncate max-w-[260px]">{selectedReg.email}</p>
                 </div>
                 <button
                   onClick={() => setShowInvoiceModal(false)}
@@ -1530,16 +2155,8 @@ const EventRegistrants: React.FC = () => {
               </div>
 
               {/* Body */}
-              <div className="space-y-4 text-xs font-semibold text-gray-300">
-                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Payment Reference:</span>
-                    <span className="font-mono text-white">{selectedReg.payment_reference || "N/A"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Payment Method:</span>
-                    <span className="capitalize text-white">{selectedReg.payment_method.replace("_", " ")}</span>
-                  </div>
+              <div className="space-y-4 text-xs font-semibold text-gray-300 overflow-y-auto pr-1 flex-1">
+                <div className="p-3 rounded-xl sm:rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Pass Code:</span>
                     <span className="font-mono text-white">{selectedReg.qr_code}</span>
@@ -1567,7 +2184,7 @@ const EventRegistrants: React.FC = () => {
                         href={selectedReg.payment_proof_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="block w-full h-32 rounded-xl bg-black/40 border border-white/10 overflow-hidden relative group"
+                        className="block w-full h-28 sm:h-32 rounded-xl bg-black/40 border border-white/10 overflow-hidden relative group"
                         title="Click to view full image"
                       >
                         <img
@@ -1583,12 +2200,42 @@ const EventRegistrants: React.FC = () => {
                   )}
                 </div>
 
+                {/* Edit Payment Method in Modal */}
+                <div>
+                  <label className="block text-[#8A9690] mb-1">Payment Method</label>
+                  <select
+                    value={modalPaymentMethod}
+                    onChange={(e) => setModalPaymentMethod(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none cursor-pointer focus:border-green-500"
+                  >
+                    <option value="cash">💵 Cash Payment</option>
+                    <option value="gcash">📱 GCash</option>
+                    <option value="bank_transfer">🏦 Bank Transfer</option>
+                    <option value="free">🎁 Complimentary / Free</option>
+                    <option value="package">📦 Package Pass / Credit</option>
+                    <option value="other">🏷️ Other</option>
+                  </select>
+                </div>
+
+                {/* Edit Payment Reference in Modal */}
+                <div>
+                  <label className="block text-[#8A9690] mb-1">Payment Reference Code / Note</label>
+                  <input
+                    type="text"
+                    value={modalPaymentReference}
+                    onChange={(e) => setModalPaymentReference(e.target.value)}
+                    placeholder="e.g. WALKIN-CASH, GCASH-1029384, Bank Deposit #9928"
+                    className="w-full px-3 py-2 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none font-mono text-xs placeholder-gray-600 focus:border-green-500"
+                  />
+                </div>
+
+                {/* Edit Payment Verification Status */}
                 <div>
                   <label className="block text-[#8A9690] mb-1">Verify Payment Status</label>
                   <select
                     value={modalPaymentStatus}
                     onChange={(e) => setModalPaymentStatus(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none"
+                    className="w-full px-3 py-2 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none cursor-pointer focus:border-green-500"
                   >
                     <option value="pending">Pending Verification</option>
                     <option value="paid">Paid (Verified)</option>
@@ -1597,6 +2244,7 @@ const EventRegistrants: React.FC = () => {
                   </select>
                 </div>
 
+                {/* Edit Invoice / Official Receipt Number */}
                 <div>
                   <label className="block text-[#8A9690] mb-1">Invoice / Receipt Number</label>
                   <input
@@ -1604,7 +2252,7 @@ const EventRegistrants: React.FC = () => {
                     value={invoiceNumInput}
                     onChange={(e) => setInvoiceNumInput(e.target.value)}
                     placeholder="e.g. INV-10045"
-                    className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none placeholder-gray-600 font-mono text-sm"
+                    className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-white outline-none placeholder-gray-600 font-mono text-sm focus:border-green-500"
                   />
                   <p className="text-[10px] text-gray-500 mt-1 font-normal">
                     Enter the invoice number from the physical official receipt copy. (Format starts automatically with 'INV-')
@@ -1613,18 +2261,24 @@ const EventRegistrants: React.FC = () => {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col gap-2 pt-6 mt-6 border-t border-white/5">
+              <div className="flex flex-col gap-2 pt-4 mt-4 border-t border-white/5 shrink-0">
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleSaveInvoiceAndStatus(selectedReg.id, invoiceNumInput, modalPaymentStatus)}
+                    onClick={() => handleSaveInvoiceAndStatus(selectedReg.id, invoiceNumInput, modalPaymentStatus, modalPaymentMethod, modalPaymentReference)}
                     disabled={actionLoading}
-                    className="flex-1 py-2.5 rounded-xl bg-green-700 hover:bg-green-600 text-white font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                    className="flex-1 py-2.5 rounded-xl bg-green-700 hover:bg-green-600 text-white font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5 text-xs sm:text-sm"
                   >
                     Save Details
                   </button>
                   <button
-                    onClick={() => handlePrintSingleInvoice({ ...selectedReg, invoice_number: invoiceNumInput, payment_status: modalPaymentStatus })}
-                    className="px-4 py-2.5 border border-white/10 hover:bg-white/5 rounded-xl text-white cursor-pointer font-bold transition-colors flex items-center gap-1.5"
+                    onClick={() => handlePrintSingleInvoice({
+                      ...selectedReg,
+                      invoice_number: invoiceNumInput,
+                      payment_status: modalPaymentStatus,
+                      payment_method: modalPaymentMethod,
+                      payment_reference: modalPaymentReference
+                    })}
+                    className="px-3.5 sm:px-4 py-2.5 border border-white/10 hover:bg-white/5 rounded-xl text-white cursor-pointer font-bold transition-colors flex items-center gap-1.5 text-xs sm:text-sm"
                   >
                     <FileDown size={14} /> Print PDF
                   </button>
@@ -1640,174 +2294,176 @@ const EventRegistrants: React.FC = () => {
             </motion.div>
           </div>
         )}
-        {/* Walk-in Registration Modal */}
-        <AnimatePresence>
-          {showWalkinModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
-                className="bg-[#0A1410] border border-white/10 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden text-slate-300 text-xs flex flex-col max-h-[90vh]"
-              >
-                {/* Header */}
-                <div className="p-6 border-b border-white/5 flex items-center justify-between">
-                  <div>
-                    <span className="text-[9px] font-heading font-black text-green-400 uppercase tracking-widest">Admin Actions</span>
-                    <h3 className="font-heading font-black text-base text-white mt-0.5">Register Walk-In Attendee</h3>
+      </AnimatePresence>
+
+      {/* Walk-in Registration Modal */}
+      <AnimatePresence>
+        {showWalkinModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#0A1410] border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden text-slate-300 text-xs flex flex-col max-h-[90vh]"
+            >
+              {/* Header */}
+              <div className="p-4 sm:p-6 border-b border-white/5 flex items-center justify-between shrink-0">
+                <div>
+                  <span className="text-[9px] font-heading font-black text-green-400 uppercase tracking-widest">Admin Actions</span>
+                  <h3 className="font-heading font-black text-base text-white mt-0.5">Register Walk-In Attendee</h3>
+                </div>
+                <button
+                  onClick={() => setShowWalkinModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Form Body */}
+              <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 font-sans">
+                {walkinError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl font-semibold">
+                    {walkinError}
                   </div>
+                )}
+
+                {/* Toggle walk-in type */}
+                <div className="flex bg-[#101D17] border border-white/5 p-1 rounded-xl gap-1">
                   <button
-                    onClick={() => setShowWalkinModal(false)}
-                    className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white cursor-pointer"
+                    type="button"
+                    onClick={() => setWalkinType("guest")}
+                    className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${walkinType === "guest" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
+                      }`}
                   >
-                    <X size={16} />
+                    Non-Member Guest
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWalkinType("member")}
+                    className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${walkinType === "member" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
+                      }`}
+                  >
+                    Registered Member
                   </button>
                 </div>
 
-                {/* Form Body */}
-                <div className="p-6 overflow-y-auto flex-1 space-y-4 font-sans">
-                  {walkinError && (
-                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl font-semibold">
-                      {walkinError}
+                <form onSubmit={handleWalkinSubmit} className="space-y-4">
+                  {walkinType === "member" ? (
+                    <div>
+                      <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Select Active Member</label>
+                      <select
+                        required
+                        value={selectedMemberId}
+                        onChange={(e) => setSelectedMemberId(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer"
+                      >
+                        <option value="">-- Choose active member profile --</option>
+                        {activeMembers.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.full_name} ({m.email})
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  )}
-
-                  {/* Toggle walk-in type */}
-                  <div className="flex bg-[#101D17] border border-white/5 p-1 rounded-xl gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setWalkinType("guest")}
-                      className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${walkinType === "guest" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
-                        }`}
-                    >
-                      Non-Member Guest
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setWalkinType("member")}
-                      className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${walkinType === "member" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
-                        }`}
-                    >
-                      Registered Member
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleWalkinSubmit} className="space-y-4">
-                    {walkinType === "member" ? (
-                      <div>
-                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Select Active Member</label>
-                        <select
-                          required
-                          value={selectedMemberId}
-                          onChange={(e) => setSelectedMemberId(e.target.value)}
-                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer"
-                        >
-                          <option value="">-- Choose active member profile --</option>
-                          {activeMembers.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.full_name} ({m.email})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Full Name</label>
-                            <input
-                              type="text"
-                              required
-                              value={walkinName}
-                              onChange={(e) => setWalkinName(e.target.value)}
-                              placeholder="e.g. John Doe"
-                              className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Email Address</label>
-                            <input
-                              type="email"
-                              required
-                              value={walkinEmail}
-                              onChange={(e) => setWalkinEmail(e.target.value)}
-                              placeholder="e.g. guest@example.com"
-                              className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
-                            />
-                          </div>
-                        </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Phone Number (Optional)</label>
+                          <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Full Name</label>
                           <input
                             type="text"
-                            value={walkinPhone}
-                            onChange={(e) => setWalkinPhone(e.target.value)}
-                            placeholder="e.g. +639171234567"
+                            required
+                            value={walkinName}
+                            onChange={(e) => setWalkinName(e.target.value)}
+                            placeholder="e.g. John Doe"
+                            className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Email Address</label>
+                          <input
+                            type="email"
+                            required
+                            value={walkinEmail}
+                            onChange={(e) => setWalkinEmail(e.target.value)}
+                            placeholder="e.g. guest@example.com"
                             className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
                           />
                         </div>
                       </div>
-                    )}
-
-                    {/* Payment Settings */}
-                    <div className="border-t border-white/5 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Payment Method</label>
-                        <select
-                          value={walkinPaymentMethod}
-                          onChange={(e) => handleWalkinPaymentMethodChange(e.target.value as any)}
-                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer"
-                        >
-                          <option value="cash">Cash Payment</option>
-                          <option value="gcash">GCash</option>
-                          <option value="bank_transfer">Bank Transfer</option>
-                          <option value="package">Package Credit / Pass</option>
-                          <option value="free">Complimentary / Free</option>
-                          <option value="other">Other</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Payment Status</label>
-                        <select
-                          disabled={walkinPaymentMethod === "free"}
-                          value={walkinPaymentStatus}
-                          onChange={(e) => setWalkinPaymentStatus(e.target.value)}
-                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer disabled:opacity-50"
-                        >
-                          <option value="paid">Paid (Received)</option>
-                          <option value="pending">Pending Payment</option>
-                          {walkinPaymentMethod === "free" && <option value="free">Free</option>}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Trace Reference ID</label>
+                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Phone Number (Optional)</label>
                         <input
                           type="text"
-                          required
-                          value={walkinReference}
-                          onChange={(e) => setWalkinReference(e.target.value)}
-                          placeholder="e.g. WALKIN-CASH"
-                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 font-mono"
+                          value={walkinPhone}
+                          onChange={(e) => setWalkinPhone(e.target.value)}
+                          placeholder="e.g. +639171234567"
+                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
                         />
                       </div>
-
-                      <div className="flex items-center pt-5">
-                        <label className="flex items-center gap-2 text-[#8A9690] cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={walkinCheckInImmediately}
-                            onChange={(e) => setWalkinCheckInImmediately(e.target.checked)}
-                            className="w-4 h-4 accent-green-600 rounded bg-[#101D17] border-white/10"
-                          />
-                          <span>Check-in Immediately</span>
-                        </label>
-                      </div>
                     </div>
+                  )}
+
+                  {/* Payment Settings */}
+                  <div className="border-t border-white/5 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Payment Method</label>
+                      <select
+                        value={walkinPaymentMethod}
+                        onChange={(e) => handleWalkinPaymentMethodChange(e.target.value as any)}
+                        className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer"
+                      >
+                        <option value="cash">Cash Payment</option>
+                        <option value="gcash">GCash</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="package">Package Credit / Pass</option>
+                        <option value="free">Complimentary / Free</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Payment Status</label>
+                      <select
+                        disabled={walkinPaymentMethod === "free"}
+                        value={walkinPaymentStatus}
+                        onChange={(e) => setWalkinPaymentStatus(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer disabled:opacity-50"
+                      >
+                        <option value="paid">Paid (Received)</option>
+                        <option value="pending">Pending Payment</option>
+                        {walkinPaymentMethod === "free" && <option value="free">Free</option>}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Trace Reference ID</label>
+                      <input
+                        type="text"
+                        required
+                        value={walkinReference}
+                        onChange={(e) => setWalkinReference(e.target.value)}
+                        placeholder="e.g. WALKIN-CASH"
+                        className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 font-mono"
+                      />
+                    </div>
+
+                    <div className="flex items-center pt-2 sm:pt-5">
+                      <label className="flex items-center gap-2 text-[#8A9690] cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={walkinCheckInImmediately}
+                          onChange={(e) => setWalkinCheckInImmediately(e.target.checked)}
+                          className="w-4 h-4 accent-green-600 rounded bg-[#101D17] border-white/10"
+                        />
+                        <span>Check-in Immediately</span>
+                      </label>
+                    </div>
+                  </div>
 
                     <div className="flex gap-2 justify-end border-t border-white/5 pt-4 mt-6">
                       <button
@@ -1831,7 +2487,6 @@ const EventRegistrants: React.FC = () => {
               </motion.div>
             </div>
           )}
-        </AnimatePresence>
       </AnimatePresence>
     </div>
   );
