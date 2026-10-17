@@ -5,7 +5,8 @@ import {
   ArrowLeft, Search, Loader2, CalendarDays, MapPin,
   User, Check, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Camera, X, FileDown,
   Receipt, Tag, UserPlus, Banknote, Smartphone, Landmark, Gift, Package,
-  Wallet, Filter, CheckCircle2, DollarSign, Sparkles, Layers, ArrowUpDown
+  Wallet, Filter, CheckCircle2, DollarSign, Sparkles, Layers, ArrowUpDown,
+  QrCode, Download, Copy
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { supabase } from "../lib/supabase";
@@ -125,6 +126,11 @@ const EventRegistrants: React.FC = () => {
   const [scannerInstance, setScannerInstance] = useState<Html5Qrcode | null>(null);
   const processingScanRef = useRef(false);
 
+  // QR Pass View & Download states
+  const [viewingQrReg, setViewingQrReg] = useState<RegistrationData | null>(null);
+  const [downloadingQr, setDownloadingQr] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
   // Walk-in registration states
   const [showWalkinModal, setShowWalkinModal] = useState(false);
   const [walkinType, setWalkinType] = useState<"member" | "guest">("guest");
@@ -139,6 +145,67 @@ const EventRegistrants: React.FC = () => {
   const [walkinCheckInImmediately, setWalkinCheckInImmediately] = useState(true);
   const [walkinError, setWalkinError] = useState<string | null>(null);
   const [walkinLoading, setWalkinLoading] = useState(false);
+
+  // Walk-in Registration Success details (for immediate QR viewing/download)
+  const [walkinSuccessData, setWalkinSuccessData] = useState<{
+    qr_code: string;
+    full_name: string;
+    email: string;
+    payment_method: string;
+    payment_status: string;
+    attendance_status: string;
+  } | null>(null);
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    toast.success("Pass reference code copied to clipboard!");
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  const handleDownloadPass = async (qrCodeText: string, registrantName: string) => {
+    setDownloadingQr(true);
+    try {
+      const response = await fetch(
+        `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrCodeText)}&size=400x400`
+      );
+      if (!response.ok) throw new Error("Failed to fetch QR code image");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const cleanEventTitle = (event?.title || "event").toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      const cleanName = (registrantName || "attendee").toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      link.download = `chamber_pass_${cleanEventTitle}_${cleanName}_${qrCodeText}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success("QR Check-in Pass downloaded successfully!");
+    } catch (err: any) {
+      toast.error("Failed to download pass: " + err.message);
+    } finally {
+      setDownloadingQr(false);
+    }
+  };
+
+  const resetWalkinForm = () => {
+    setWalkinName("");
+    setWalkinEmail("");
+    setWalkinPhone("");
+    setSelectedMemberId("");
+    setWalkinReference("WALKIN-CASH");
+    setWalkinPaymentMethod("cash");
+    setWalkinPaymentStatus("paid");
+    setWalkinCheckInImmediately(true);
+    setWalkinError(null);
+    setWalkinSuccessData(null);
+  };
+
+  const handleCloseWalkinModal = () => {
+    setShowWalkinModal(false);
+    resetWalkinForm();
+  };
 
   const fetchActiveMembers = async () => {
     try {
@@ -211,21 +278,21 @@ const EventRegistrants: React.FC = () => {
 
       if (error) throw error;
       toast.success("Walk-in registration successful!");
-      setShowWalkinModal(false);
 
-      // Reset walk-in form
-      setWalkinName("");
-      setWalkinEmail("");
-      setWalkinPhone("");
-      setSelectedMemberId("");
-      setWalkinReference("WALKIN-CASH");
-      setWalkinPaymentMethod("cash");
-      setWalkinPaymentStatus("paid");
-      setWalkinCheckInImmediately(true);
+      // Display newly generated QR pass confirmation view
+      setWalkinSuccessData({
+        qr_code: qrPassCode,
+        full_name: targetName,
+        email: targetEmail,
+        payment_method: walkinPaymentMethod,
+        payment_status: walkinPaymentStatus,
+        attendance_status: walkinCheckInImmediately ? "attended" : "registered",
+      });
 
-      // Reload lists
+      // Reload lists and statistics in background
       setPage(1);
       fetchRegistrants();
+      fetchEventStats();
     } catch (err: any) {
       setWalkinError(err.message || "Failed to register walk-in.");
     } finally {
@@ -626,6 +693,7 @@ const EventRegistrants: React.FC = () => {
 
       // Update local state directly to be fast and reactive
       setRegistrants(prev => prev.map(r => r.id === regId ? { ...r, attendance_status: nextStatus } : r));
+      setViewingQrReg(prev => prev && prev.id === regId ? { ...prev, attendance_status: nextStatus } : prev);
       setCheckedInCount(prev => nextStatus === "attended" ? prev + 1 : Math.max(0, prev - 1));
       fetchEventStats();
       toast.success(nextStatus === "attended" ? "Attendee checked in successfully!" : "Attendee checked out.");
@@ -1355,7 +1423,7 @@ const EventRegistrants: React.FC = () => {
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full sm:w-auto">
           <button
-            onClick={() => { setShowWalkinModal(true); fetchActiveMembers(); }}
+            onClick={() => { resetWalkinForm(); setShowWalkinModal(true); fetchActiveMembers(); }}
             className="flex items-center gap-1.5 bg-green-700 hover:bg-green-600 text-white px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-green-950/20 shrink-0"
           >
             <UserPlus size={14} />
@@ -1857,7 +1925,7 @@ const EventRegistrants: React.FC = () => {
                 <tr className="border-b border-white/5 text-gray-400 font-bold uppercase tracking-wider bg-white/[0.01]">
                   <th className="py-3.5 px-4">Name</th>
                   <th className="py-3.5 px-4">Email</th>
-                  <th className="py-3.5 px-4">Reference Code</th>
+                  <th className="py-3.5 px-4">Pass Code / QR</th>
                   <th className="py-3.5 px-4">Payment Method</th>
                   <th className="py-3.5 px-4">Payment Status</th>
                   <th className="py-3.5 px-4">Attendance</th>
@@ -1888,7 +1956,26 @@ const EventRegistrants: React.FC = () => {
                     <tr key={reg.id} className="hover:bg-white/[0.01] transition-colors">
                       <td className="py-3.5 px-4 text-white font-bold">{reg.full_name}</td>
                       <td className="py-3.5 px-4 text-gray-400 font-normal">{reg.email}</td>
-                      <td className="py-3.5 px-4 font-mono text-gray-400">{reg.qr_code}</td>
+                      <td className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => setViewingQrReg(reg)}
+                          className="group flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-white/[0.02] hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 transition-all text-left cursor-pointer"
+                          title="Click to view and scan QR code pass"
+                        >
+                          <div className="w-6 h-6 rounded-lg bg-black/40 border border-white/10 group-hover:border-emerald-500/40 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-all shrink-0">
+                            <QrCode size={13} />
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-mono text-xs text-gray-200 group-hover:text-emerald-300 font-bold tracking-wide truncate">
+                              {reg.qr_code}
+                            </span>
+                            <span className="text-[9px] text-gray-500 group-hover:text-emerald-400 font-sans">
+                              View QR Pass
+                            </span>
+                          </div>
+                        </button>
+                      </td>
                       <td className="py-3.5 px-4 font-normal text-gray-400">
                         {/* Interactive In-table Payment Method Selector */}
                         <div className="flex flex-col gap-1">
@@ -1958,6 +2045,15 @@ const EventRegistrants: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex justify-end items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setViewingQrReg(reg)}
+                            className="px-2.5 py-1.5 rounded-lg border border-white/5 text-[10px] font-bold text-gray-300 bg-[#0E1D16] hover:bg-[#142C21] hover:text-emerald-300 hover:border-emerald-500/30 transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
+                            title="View and download entry QR pass"
+                          >
+                            <QrCode size={12} className="text-emerald-400" />
+                            <span className="hidden sm:inline">QR Pass</span>
+                          </button>
                           <button
                             onClick={() => {
                               setSelectedReg(reg);
@@ -2160,9 +2256,19 @@ const EventRegistrants: React.FC = () => {
               {/* Body */}
               <div className="space-y-4 text-xs font-semibold text-gray-300 overflow-y-auto pr-1 flex-1">
                 <div className="p-3 rounded-xl sm:rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-gray-400">Pass Code:</span>
-                    <span className="font-mono text-white">{selectedReg.qr_code}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-white">{selectedReg.qr_code}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadPass(selectedReg.qr_code, selectedReg.full_name)}
+                        className="p-1 rounded-md bg-white/5 hover:bg-emerald-500/20 text-gray-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                        title="Download QR check-in pass"
+                      >
+                        <Download size={13} />
+                      </button>
+                    </div>
                   </div>
                   {selectedReg.discount_amount && selectedReg.discount_amount > 0 ? (
                     <>
@@ -2302,7 +2408,7 @@ const EventRegistrants: React.FC = () => {
       {/* Walk-in Registration Modal */}
       <AnimatePresence>
         {showWalkinModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md overflow-y-auto">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -2313,165 +2419,241 @@ const EventRegistrants: React.FC = () => {
               {/* Header */}
               <div className="p-4 sm:p-6 border-b border-white/5 flex items-center justify-between shrink-0">
                 <div>
-                  <span className="text-[9px] font-heading font-black text-green-400 uppercase tracking-widest">Admin Actions</span>
-                  <h3 className="font-heading font-black text-base text-white mt-0.5">Register Walk-In Attendee</h3>
+                  <span className="text-[9px] font-heading font-black text-green-400 uppercase tracking-widest">
+                    {walkinSuccessData ? "Registration Complete" : "Admin Actions"}
+                  </span>
+                  <h3 className="font-heading font-black text-base text-white mt-0.5">
+                    {walkinSuccessData ? "Walk-In Pass Generated" : "Register Walk-In Attendee"}
+                  </h3>
                 </div>
                 <button
-                  onClick={() => setShowWalkinModal(false)}
+                  onClick={handleCloseWalkinModal}
                   className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white cursor-pointer"
                 >
                   <X size={16} />
                 </button>
               </div>
 
-              {/* Form Body */}
-              <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 font-sans">
-                {walkinError && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl font-semibold">
-                    {walkinError}
+              {/* Modal Body */}
+              {walkinSuccessData ? (
+                <div className="p-5 sm:p-6 overflow-y-auto flex-1 flex flex-col items-center text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-2 shadow-inner">
+                    <CheckCircle2 size={28} />
                   </div>
-                )}
+                  <h4 className="text-base font-heading font-black text-white mt-1">
+                    {walkinSuccessData.full_name}
+                  </h4>
+                  <p className="text-xs text-gray-400">{walkinSuccessData.email}</p>
 
-                {/* Toggle walk-in type */}
-                <div className="flex bg-[#101D17] border border-white/5 p-1 rounded-xl gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setWalkinType("guest")}
-                    className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${walkinType === "guest" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
-                      }`}
-                  >
-                    Non-Member Guest
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWalkinType("member")}
-                    className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${walkinType === "member" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
-                      }`}
-                  >
-                    Registered Member
-                  </button>
-                </div>
-
-                <form onSubmit={handleWalkinSubmit} className="space-y-4">
-                  {walkinType === "member" ? (
-                    <div>
-                      <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Select Active Member</label>
-                      <select
-                        required
-                        value={selectedMemberId}
-                        onChange={(e) => setSelectedMemberId(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer"
-                      >
-                        <option value="">-- Choose active member profile --</option>
-                        {activeMembers.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.full_name} ({m.email})
-                          </option>
-                        ))}
-                      </select>
+                  {/* Scannable Pass Card */}
+                  <div className="my-4 p-4 sm:p-5 bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col items-center w-52 sm:w-56">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(walkinSuccessData.qr_code)}`}
+                      alt={`Walk-In Pass - ${walkinSuccessData.qr_code}`}
+                      className="w-40 h-40 sm:w-44 sm:h-44 object-contain"
+                    />
+                    <div className="mt-3 pt-2.5 border-t border-gray-100 w-full text-center">
+                      <div className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Entry Pass Code</div>
+                      <div className="font-mono text-sm font-extrabold text-gray-900 tracking-wider">
+                        {walkinSuccessData.qr_code}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Full Name</label>
-                          <input
-                            type="text"
-                            required
-                            value={walkinName}
-                            onChange={(e) => setWalkinName(e.target.value)}
-                            placeholder="e.g. John Doe"
-                            className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Email Address</label>
-                          <input
-                            type="email"
-                            required
-                            value={walkinEmail}
-                            onChange={(e) => setWalkinEmail(e.target.value)}
-                            placeholder="e.g. guest@example.com"
-                            className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Phone Number (Optional)</label>
-                        <input
-                          type="text"
-                          value={walkinPhone}
-                          onChange={(e) => setWalkinPhone(e.target.value)}
-                          placeholder="e.g. +639171234567"
-                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
-                        />
-                      </div>
+                  </div>
+
+                  {/* Summary Status Badges */}
+                  <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+                    <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/[0.04] border border-white/10 text-gray-300">
+                      Payment: <strong className="text-white capitalize">{walkinSuccessData.payment_method} ({walkinSuccessData.payment_status})</strong>
+                    </span>
+                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${
+                      walkinSuccessData.attendance_status === "attended"
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                        : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                    }`}>
+                      {walkinSuccessData.attendance_status === "attended" ? "✓ Marked Attended" : "Ready for Entry Scan"}
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-gray-400 max-w-sm mb-5 leading-relaxed">
+                    Download and save the pass image to present/send to the attendee, or let them take a photo/scan it now at the gate.
+                  </p>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row gap-2 w-full pt-3 border-t border-white/5">
+                    <button
+                      type="button"
+                      disabled={downloadingQr}
+                      onClick={() => handleDownloadPass(walkinSuccessData.qr_code, walkinSuccessData.full_name)}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-green-700 hover:bg-green-600 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-green-950/40"
+                    >
+                      {downloadingQr ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                      Download QR Pass (PNG)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetWalkinForm}
+                      className="py-2.5 px-4 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-gray-300 hover:text-white font-bold text-xs border border-white/10 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <UserPlus size={13} />
+                      Register Another
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCloseWalkinModal}
+                      className="py-2.5 px-4 rounded-xl bg-transparent hover:bg-white/5 text-gray-400 hover:text-white font-bold text-xs border border-white/10 transition-all cursor-pointer"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 font-sans">
+                  {walkinError && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl font-semibold">
+                      {walkinError}
                     </div>
                   )}
 
-                  {/* Payment Settings */}
-                  <div className="border-t border-white/5 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Payment Method</label>
-                      <select
-                        value={walkinPaymentMethod}
-                        onChange={(e) => handleWalkinPaymentMethodChange(e.target.value as any)}
-                        className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer"
-                      >
-                        <option value="cash">Cash Payment</option>
-                        <option value="gcash">GCash</option>
-                        <option value="bank_transfer">Bank Transfer</option>
-                        <option value="package">Package Credit / Pass</option>
-                        <option value="free">Complimentary / Free</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Payment Status</label>
-                      <select
-                        disabled={walkinPaymentMethod === "free"}
-                        value={walkinPaymentStatus}
-                        onChange={(e) => setWalkinPaymentStatus(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer disabled:opacity-50"
-                      >
-                        <option value="paid">Paid (Received)</option>
-                        <option value="pending">Pending Payment</option>
-                        {walkinPaymentMethod === "free" && <option value="free">Free</option>}
-                      </select>
-                    </div>
+                  {/* Toggle walk-in type */}
+                  <div className="flex bg-[#101D17] border border-white/5 p-1 rounded-xl gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setWalkinType("guest")}
+                      className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${walkinType === "guest" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
+                        }`}
+                    >
+                      Non-Member Guest
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWalkinType("member")}
+                      className={`flex-1 py-2 text-center rounded-lg font-bold cursor-pointer transition-all ${walkinType === "member" ? "bg-green-700 text-white" : "text-gray-500 hover:text-white"
+                        }`}
+                    >
+                      Registered Member
+                    </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Trace Reference ID</label>
-                      <input
-                        type="text"
-                        required
-                        value={walkinReference}
-                        onChange={(e) => setWalkinReference(e.target.value)}
-                        placeholder="e.g. WALKIN-CASH"
-                        className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 font-mono"
-                      />
+                  <form onSubmit={handleWalkinSubmit} className="space-y-4">
+                    {walkinType === "member" ? (
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Select Active Member</label>
+                        <select
+                          required
+                          value={selectedMemberId}
+                          onChange={(e) => setSelectedMemberId(e.target.value)}
+                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer"
+                        >
+                          <option value="">-- Choose active member profile --</option>
+                          {activeMembers.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.full_name} ({m.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Full Name</label>
+                            <input
+                              type="text"
+                              required
+                              value={walkinName}
+                              onChange={(e) => setWalkinName(e.target.value)}
+                              placeholder="e.g. John Doe"
+                              className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Email Address</label>
+                            <input
+                              type="email"
+                              required
+                              value={walkinEmail}
+                              onChange={(e) => setWalkinEmail(e.target.value)}
+                              placeholder="e.g. guest@example.com"
+                              className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Phone Number (Optional)</label>
+                          <input
+                            type="text"
+                            value={walkinPhone}
+                            onChange={(e) => setWalkinPhone(e.target.value)}
+                            placeholder="e.g. +639171234567"
+                            className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment Settings */}
+                    <div className="border-t border-white/5 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Payment Method</label>
+                        <select
+                          value={walkinPaymentMethod}
+                          onChange={(e) => handleWalkinPaymentMethodChange(e.target.value as any)}
+                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer"
+                        >
+                          <option value="cash">Cash Payment</option>
+                          <option value="gcash">GCash</option>
+                          <option value="bank_transfer">Bank Transfer</option>
+                          <option value="package">Package Credit / Pass</option>
+                          <option value="free">Complimentary / Free</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Payment Status</label>
+                        <select
+                          disabled={walkinPaymentMethod === "free"}
+                          value={walkinPaymentStatus}
+                          onChange={(e) => setWalkinPaymentStatus(e.target.value)}
+                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 cursor-pointer disabled:opacity-50"
+                        >
+                          <option value="paid">Paid (Received)</option>
+                          <option value="pending">Pending Payment</option>
+                          {walkinPaymentMethod === "free" && <option value="free">Free</option>}
+                        </select>
+                      </div>
                     </div>
 
-                    <div className="flex items-center pt-2 sm:pt-5">
-                      <label className="flex items-center gap-2 text-[#8A9690] cursor-pointer select-none">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#8A9690] uppercase tracking-wider mb-1.5">Trace Reference ID</label>
                         <input
-                          type="checkbox"
-                          checked={walkinCheckInImmediately}
-                          onChange={(e) => setWalkinCheckInImmediately(e.target.checked)}
-                          className="w-4 h-4 accent-green-600 rounded bg-[#101D17] border-white/10"
+                          type="text"
+                          required
+                          value={walkinReference}
+                          onChange={(e) => setWalkinReference(e.target.value)}
+                          placeholder="e.g. WALKIN-CASH"
+                          className="w-full px-3 py-2.5 bg-[#101D17] border border-white/10 rounded-xl text-xs text-white outline-none focus:border-green-500 font-mono"
                         />
-                        <span>Check-in Immediately</span>
-                      </label>
+                      </div>
+
+                      <div className="flex items-center pt-2 sm:pt-5">
+                        <label className="flex items-center gap-2 text-[#8A9690] cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={walkinCheckInImmediately}
+                            onChange={(e) => setWalkinCheckInImmediately(e.target.checked)}
+                            className="w-4 h-4 accent-green-600 rounded bg-[#101D17] border-white/10"
+                          />
+                          <span>Check-in Immediately</span>
+                        </label>
+                      </div>
                     </div>
-                  </div>
 
                     <div className="flex gap-2 justify-end border-t border-white/5 pt-4 mt-6">
                       <button
                         type="button"
-                        onClick={() => setShowWalkinModal(false)}
+                        onClick={handleCloseWalkinModal}
                         className="px-4 py-2 border border-white/5 hover:bg-white/5 rounded-xl text-gray-400 cursor-pointer"
                       >
                         Cancel
@@ -2487,9 +2669,126 @@ const EventRegistrants: React.FC = () => {
                     </div>
                   </form>
                 </div>
-              </motion.div>
-            </div>
-          )}
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ATTENDEE ENTRY QR PASS MODAL */}
+      <AnimatePresence>
+        {viewingQrReg && (
+          <div className="fixed inset-0 z-[125] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-[#0A1410] border border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 overflow-hidden shadow-2xl relative flex flex-col items-center"
+            >
+              {/* Header */}
+              <div className="w-full flex justify-between items-start mb-3 pb-3 border-b border-white/5">
+                <div>
+                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                    <QrCode size={11} /> Check-In Entry Pass
+                  </span>
+                  <h3 className="font-heading font-black text-white text-base mt-2 truncate max-w-[240px]">
+                    {viewingQrReg.full_name}
+                  </h3>
+                  <p className="text-[11px] text-gray-400 truncate max-w-[240px]">{viewingQrReg.email}</p>
+                </div>
+                <button
+                  onClick={() => setViewingQrReg(null)}
+                  className="p-1.5 rounded-xl border border-white/5 text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Scannable QR Code Image */}
+              <div className="p-4 bg-white rounded-2xl shadow-2xl flex flex-col items-center my-2 text-center w-56">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(viewingQrReg.qr_code)}`}
+                  alt={`QR Pass - ${viewingQrReg.qr_code}`}
+                  className="w-44 h-44 object-contain"
+                />
+                <div className="mt-3 pt-2 border-t border-gray-100 w-full flex items-center justify-center gap-1.5">
+                  <span className="font-mono text-xs font-black text-gray-900 tracking-wider">
+                    {viewingQrReg.qr_code}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCode(viewingQrReg.qr_code)}
+                    className="p-1 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                    title="Copy pass reference code"
+                  >
+                    {copiedCode === viewingQrReg.qr_code ? (
+                      <Check size={12} className="text-emerald-600" />
+                    ) : (
+                      <Copy size={12} />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Badges */}
+              <div className="w-full flex items-center justify-center gap-2 my-2.5">
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold capitalize ${
+                  viewingQrReg.payment_status === "paid" || viewingQrReg.payment_status === "free"
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                    : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                }`}>
+                  Payment: {viewingQrReg.payment_status}
+                </span>
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold capitalize ${
+                  viewingQrReg.attendance_status === "attended"
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                    : "bg-white/5 text-gray-400 border border-white/10"
+                }`}>
+                  {viewingQrReg.attendance_status}
+                </span>
+              </div>
+
+              <p className="text-[10px] text-gray-400 text-center leading-relaxed mb-4">
+                This QR code can be scanned directly from screen by the camera scanner, or downloaded to share with the attendee.
+              </p>
+
+              {/* Actions */}
+              <div className="w-full space-y-2">
+                <button
+                  type="button"
+                  disabled={downloadingQr}
+                  onClick={() => handleDownloadPass(viewingQrReg.qr_code, viewingQrReg.full_name)}
+                  className="w-full py-2.5 rounded-xl bg-green-700 hover:bg-green-600 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-green-950/40"
+                >
+                  {downloadingQr ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  Download QR Pass (PNG)
+                </button>
+
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={() => handleToggleAttendance(viewingQrReg.id, viewingQrReg.attendance_status)}
+                  className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                    viewingQrReg.attendance_status === "attended"
+                      ? "border-emerald-500/30 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-950/50"
+                      : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  {viewingQrReg.attendance_status === "attended" ? "✓ Attended (Click to Revert)" : "Mark as Attended Now"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setViewingQrReg(null)}
+                  className="w-full py-2 rounded-xl text-xs font-semibold text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
     </div>
   );
